@@ -7,6 +7,7 @@ import type { HeardSound, SoundEvent, TeamId, Vec } from './types';
 import type { World } from './world';
 
 const VISION = RULES.vision_tiles;
+export const PUCK_VISION = 6;
 const HEARD_KEEP_TICKS = 60 * 6;
 
 export function canSee(w: World, from: Vec, to: Vec): boolean {
@@ -18,12 +19,16 @@ export function updatePerception(w: World) {
   const obs = w.obstacles();
   for (const team of [0, 1] as TeamId[]) {
     const eyes = w.actors.filter((a) => a.team === team && a.alive);
+    const puck = w.entities.find((e) => e.kind === 'puck' && e.team === team);
+    // the puck is a low camera: shorter view, still hard-occluded by walls
+    const viewers: Array<{ id: number; pos: Vec; range: number }> = eyes.map((a) => ({ id: a.id, pos: a.pos, range: VISION }));
+    if (puck && puck.kind === 'puck') viewers.push({ id: -puck.id, pos: puck.pos, range: PUCK_VISION });
     const vis = new Set<number>();
     const spot = new Map<number, number>();
     for (const e of w.actors) {
       if (e.team === team || !e.alive) continue;
-      for (const s of eyes) {
-        if (dist(s.pos, e.pos) > VISION) continue;
+      for (const s of viewers) {
+        if (dist(s.pos, e.pos) > s.range) continue;
         if (lineOfSight(w, s.pos, e.pos, obs)) {
           vis.add(e.id);
           spot.set(e.id, s.id);
@@ -49,6 +54,8 @@ export function updatePerception(w: World) {
         continue;
       }
       const c = ent.kind === 'cover' ? { x: ent.obb.cx, y: ent.obb.cy } : ent.kind === 'hinge' ? ent.center : ent.pos;
+      // the puck reveals gadgets too
+      const extraEyes = viewers.filter((v) => v.id < 0).map((v) => ({ pos: v.pos }));
       const probes: Vec[] = [c];
       if (ent.kind === 'hinge') {
         probes.push({ x: c.x + Math.cos(ent.angle) * 0.8, y: c.y + Math.sin(ent.angle) * 0.8 });
@@ -59,7 +66,7 @@ export function updatePerception(w: World) {
         probes.push({ x: c.x - Math.cos(ent.obb.angle) * 0.6, y: c.y - Math.sin(ent.obb.angle) * 0.6 });
       }
       let seen = false;
-      for (const s of eyes) {
+      for (const s of [...eyes, ...extraEyes]) {
         for (const p of probes) {
           if (dist(s.pos, p) > VISION + 1) continue;
           const hit = raycast(w, s.pos, p, 'sight', { obs, ignoreEntity: ent.id });
@@ -77,14 +84,15 @@ export function updatePerception(w: World) {
     // soft panel / barricade knowledge: updated only when the surface is observed
     if (w.tick % 6 === 0 || w.tick < 2) {
       const m = w.map;
+      const eyePos = viewers.map((v) => v.pos);
       for (const g of m.softGroups) {
         if (w.soft[g.index].reinforcedBy === team) w.knownSoft[team][g.index] = w.soft[g.index].state;
-        if (observeCells(w, eyes.map((e) => e.pos), g.cells)) w.knownSoft[team][g.index] = w.soft[g.index].state;
+        if (observeCells(w, eyePos, g.cells)) w.knownSoft[team][g.index] = w.soft[g.index].state;
       }
       for (const d of m.doors) {
         const bar = w.barricades[d.index];
         if (bar && bar.team === team) w.knownBarricade[team][d.index] = true;
-        else if (observeCells(w, eyes.map((e) => e.pos), d.cells)) w.knownBarricade[team][d.index] = !!bar;
+        else if (observeCells(w, eyePos, d.cells)) w.knownBarricade[team][d.index] = !!bar;
       }
     }
     // expire old heard sounds

@@ -19,7 +19,7 @@ import { canSee } from '../sim/perception';
 import { angleTo, dist, normAngle, type GeoState } from '../sim/geometry';
 import { roomAt } from '../sim/mapdata';
 import { REASON_TEXT } from '../sim/rules';
-import type { ActorIntent, GadgetCommand, SimEvent, Vec, HingeEntity, SledEntity } from '../sim/types';
+import type { ActorIntent, GadgetCommand, SimEvent, Vec, HingeEntity, SledEntity, PuckEntity } from '../sim/types';
 import type { Order } from '../ai/brain';
 
 type State = 'menu' | 'playing' | 'paused' | 'takeover' | 'result' | 'spectate';
@@ -70,6 +70,7 @@ export class App {
   private hintDone = new Set<string>();
   private ordersPanel: HTMLElement | null = null;
   private pauseReturn: State = 'playing';
+  private drivingPuck = false;
   /** test bridge (development only) */
   debug: Record<string, unknown> = {};
 
@@ -278,6 +279,7 @@ export class App {
     this.takeoverAuto = -1;
     this.resultAt = -1;
     this.lowTimeSec = -1;
+    this.drivingPuck = false;
     this.stats = { sledBreach: '', humanKills: 0, humanArmed: false, humanShutoff: -1, hingeTurns: 0, takeovers: 0, coverStops: 0 };
     this.state = 'playing';
     this.setScreen(null);
@@ -378,10 +380,15 @@ export class App {
     return w?.human();
   }
 
+  private puck(w: World): PuckEntity | undefined {
+    return w.entities.find((e): e is PuckEntity => e.kind === 'puck' && e.team === 0);
+  }
+
   private gadgetPreviewAllowed(): boolean {
     const w = this.match?.world;
     const a = this.human();
     if (!w || !a || !a.alive) return false;
+    if (w.phase === 'prep' && a.side === 'attack') return false;
     if (a.operatorId === 'ram') {
       if (w.entities.some((e) => e.kind === 'sled' && e.ownerId === a.id)) return false;
       const v = validateRamLaunch(w, a);
@@ -399,6 +406,18 @@ export class App {
     const w = this.match?.world;
     const a = this.human();
     if (!w || !a || !a.alive) return null;
+    if (w.phase === 'prep' && a.side === 'attack') {
+      if (!this.puck(w)) {
+        this.hud?.toast('The puck was destroyed');
+        this.sfx.play('invalid');
+        return null;
+      }
+      this.drivingPuck = !this.drivingPuck;
+      this.hintDone.add('puck');
+      this.hud?.toast(this.drivingPuck ? 'Driving the scouting puck — tap again to return' : 'Back with the squad', true);
+      this.click('ui_confirm');
+      return null;
+    }
     if (a.operatorId === 'ram') {
       if (w.entities.some((e) => e.kind === 'sled' && e.ownerId === a.id)) return { type: 'ramDeploy' };
       return null;
@@ -493,6 +512,10 @@ export class App {
     const w = this.match?.world;
     const a = this.human();
     if (!w || !a) return null;
+    if (w.phase === 'prep' && a.side === 'attack') {
+      const pk = this.puck(w);
+      return { icon: 'puck', label: !pk ? 'Lost' : this.drivingPuck ? 'Return' : 'Puck', pips: pk ? 1 : 0, pipsMax: 1, enabled: !!pk, cooldown: 0 };
+    }
     if (a.operatorId === 'ram') {
       const sled = w.entities.find((e): e is SledEntity => e.kind === 'sled' && e.ownerId === a.id);
       if (sled) return { icon: 'brake', label: 'Brake', pips: 0, pipsMax: 1, enabled: true, cooldown: 0 };
@@ -520,6 +543,7 @@ export class App {
     this.hintSteps.push({ id: 'move', text: touch() ? 'Drag on the LEFT side to move' : 'Move with W A S D', when: () => c().movedOnce });
     this.hintSteps.push({ id: 'aim', text: touch() ? 'Drag on the RIGHT side to aim — you fire while dragging' : 'Aim with the mouse, hold left click to fire', when: () => c().aimedOnce });
     if (side === 'attack') {
+      this.hintSteps.push({ id: 'puck', text: 'Prep: tap GADGET to drive the scouting puck inside (or let a teammate scout)', when: (w) => this.hintDone.has('puck') || w.phase !== 'prep' });
       this.hintSteps.push({ id: 'sled', text: touch() ? 'Hold GADGET and drag toward a dashed wall panel — release to send Ram’s sled' : 'Hold Q, aim at a dashed wall panel, release to send the sled', when: () => this.hintDone.has('sled') });
       this.hintSteps.push({ id: 'brake', text: touch() ? 'Tap GADGET again to brake — the sled unfolds into cover' : 'Tap Q again to brake — the sled unfolds into cover', when: () => this.hintDone.has('brake') });
       this.hintSteps.push({ id: 'arm', text: 'At the office console, hold INTERACT for 3s to arm it', when: (w) => w.phase === 'armed' });
@@ -596,13 +620,15 @@ export class App {
       this.controls.playerScreen = { x: scr.x, y: scr.y - 8 };
       this.controls.mouseWorld = null;
     }
-    const spectate = this.state === 'spectate' ? { x: w.map.console.center.x * T, y: w.map.console.center.y * T } : null;
+    const pk = this.drivingPuck ? this.puck(w) : undefined;
+    const spectate = this.state === 'spectate' ? { x: w.map.console.center.x * T, y: w.map.console.center.y * T } : pk ? { x: pk.pos.x * T, y: pk.pos.y * T } : null;
     this.view.render(this.stepper.alpha, dt, humanId, this.preview(), spectate ?? (human && !human.alive ? { x: human.pos.x * T, y: human.pos.y * T } : null));
     if (this.controls) {
       const cam = this.scene.cameras.main;
       void cam;
     }
     if (this.hud) {
+      this.hud.root.classList.toggle('previewing', !!this.controls?.gadget.active);
       const statuses = this.statuses();
       const interact = human && human.alive ? bestInteract(w, human) : null;
       this.hud.update(w, humanId, m.score, statuses, interact, this.gadgetUi());
@@ -646,6 +672,12 @@ export class App {
       this.aimAssist(w, intent);
       const h = w.human();
       if (import.meta.env.DEV && this.debug.autopilot && h) intent = m.ai.intentFor(h.id);
+      if (this.drivingPuck && (w.phase !== 'prep' || !this.puck(w))) this.drivingPuck = false;
+      if (this.drivingPuck) {
+        intent.puck = intent.move;
+        intent.move = { x: 0, y: 0 };
+        intent.fire = false;
+      }
     }
     const ended = m.step(intent);
     const events = w.events;
@@ -858,6 +890,15 @@ export class App {
           if (hg && hg.ownerId === human?.id) this.hintDone.add('rotate');
           break;
         }
+        case 'puckDestroyed': {
+          const own = w.attackTeam === 0;
+          if (own) {
+            this.hud?.toast('Scouting puck destroyed');
+            this.drivingPuck = false;
+          }
+          if (own || this.pointSeen(w, e.pos)) this.playAt(w, 'cover_break', e.pos, 10);
+          break;
+        }
         case 'interactCancel':
           if (e.actorId === human?.id && e.reason !== 'Released') this.hud?.toast(`Interrupted — ${e.reason.toLowerCase()}`);
           break;
@@ -871,6 +912,10 @@ export class App {
         this.sfx.play('low_time', { volume: 0.6 });
       }
     }
+  }
+
+  private pointSeen(w: World, p: Vec): boolean {
+    return w.actors.some((a) => a.team === 0 && a.alive && canSee(w, a.pos, p));
   }
 
   private onHumanDeath() {

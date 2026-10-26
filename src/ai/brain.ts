@@ -11,13 +11,13 @@ import {
   validateHingePlacement,
   validateRamLaunch,
 } from '../sim/gadgets';
-import type { Actor, ActorIntent, HingeEntity, TeamId, Vec } from '../sim/types';
+import type { Actor, ActorIntent, HingeEntity, PuckEntity, TeamId, Vec } from '../sim/types';
 import { emptyIntent } from '../sim/types';
 import type { Difficulty, World } from '../sim/world';
 import { findPath, smooth, walkable, navGrid, type PathPoint } from './nav';
 
 export type Order = { kind: 'auto' } | { kind: 'follow' } | { kind: 'hold'; pos: Vec };
-export type BotStatus = 'Moving' | 'Ready' | 'Blocked' | 'Following' | 'Holding' | 'Fighting' | 'Breaching' | 'Arming' | '';
+export type BotStatus = 'Scouting' | 'Moving' | 'Ready' | 'Blocked' | 'Following' | 'Holding' | 'Fighting' | 'Breaching' | 'Arming' | '';
 
 interface DiffParams {
   reaction: [number, number];
@@ -84,6 +84,7 @@ export interface BotState {
   breakDoor: number;
   lastThink: number;
   heardIds: Set<number>;
+  puckPath: Vec[];
 }
 
 /** Snapshot of what one bot may legitimately know this tick. */
@@ -160,6 +161,7 @@ export class AIDirector {
       breakDoor: -1,
       lastThink: -100,
       heardIds: new Set(),
+      puckPath: [],
     };
   }
 
@@ -294,6 +296,7 @@ export class AIDirector {
 
     const engaged = this.combat(a, b, p, intent);
     this.executeTask(a, b, p, intent, engaged);
+    if (!engaged) this.drivePuck(a, b, intent);
     if (!engaged) this.idleAim(a, b, p, intent);
 
     // reload discipline
@@ -301,9 +304,62 @@ export class AIDirector {
     return intent;
   }
 
+  /** The shared puck this bot may drive (attack support, prep, nobody human driving it). */
+  private puckFor(a: Actor): PuckEntity | null {
+    const w = this.w;
+    if (w.phase !== 'prep' || a.side !== 'attack') return null;
+    const pk = w.entities.find((e): e is PuckEntity => e.kind === 'puck' && e.team === a.team);
+    if (!pk) return null;
+    const driver = w.actor(pk.driverId);
+    if (driver && driver.controller === 'human') return null;
+    return pk;
+  }
+
+  private drivePuck(a: Actor, b: BotState, intent: ActorIntent) {
+    const w = this.w;
+    if (b.role !== 'support' || a.controller !== 'bot') return;
+    const pk = this.puckFor(a);
+    if (!pk) return;
+    const goal = w.map.console.center;
+    if (dist(pk.pos, goal) < 3.5) {
+      intent.puck = { x: 0, y: 0 };
+      return;
+    }
+    if (!b.puckPath.length || w.tick % 60 === 0) {
+      const r = findPath(w, 'free', pk.pos, goal);
+      b.puckPath = r ? r.points.slice(1) : [];
+    }
+    while (b.puckPath.length && dist(pk.pos, b.puckPath[0]) < 0.35) b.puckPath.shift();
+    const next = b.puckPath[0];
+    if (!next) return;
+    const d = dist(pk.pos, next) || 1;
+    intent.puck = { x: (next.x - pk.pos.x) / d, y: (next.y - pk.pos.y) / d };
+  }
+
+  /** Defenders shoot a scouting puck they can actually see (same reaction rules as actors). */
+  private shootPuck(a: Actor, b: BotState, intent: ActorIntent): boolean {
+    const w = this.w;
+    if (a.side !== 'defence') return false;
+    const pk = w.entities.find((e): e is PuckEntity => e.kind === 'puck' && e.team !== a.team);
+    if (!pk || !canSee(w, a.pos, pk.pos)) return false;
+    if (b.targetId !== -pk.id) {
+      b.targetId = -pk.id;
+      b.acquiredTick = w.tick;
+      b.reactionTicks = secs(w.rng.range(this.diff.reaction[0], this.diff.reaction[1]));
+    }
+    const ang = angleTo(a.pos, pk.pos);
+    const maxTurn = this.diff.turnRate / 60;
+    const delta = normAngle(ang - a.facing);
+    intent.aim = a.facing + Math.max(-maxTurn, Math.min(maxTurn, delta));
+    intent.fire = w.tick - b.acquiredTick >= b.reactionTicks && Math.abs(delta) < 0.12 && canShoot(w, a);
+    b.status = 'Fighting';
+    return true;
+  }
+
   private combat(a: Actor, b: BotState, p: Perception, intent: ActorIntent): boolean {
     const w = this.w;
     if (p.visible.length === 0) {
+      if (this.shootPuck(a, b, intent)) return true;
       b.targetId = null;
       return false;
     }
@@ -414,7 +470,7 @@ export class AIDirector {
     const w = this.w;
     const team = a.team;
     if (w.phase === 'prep') {
-      b.task = { kind: 'hold', pos: { ...a.pos }, face: -Math.PI / 2, label: 'Ready' };
+      b.task = { kind: 'hold', pos: { ...a.pos }, face: -Math.PI / 2, label: b.role === 'support' && this.puckFor(a) ? 'Scouting' : 'Ready' };
       return;
     }
     const console = w.map.console;

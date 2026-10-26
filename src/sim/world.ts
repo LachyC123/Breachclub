@@ -23,7 +23,7 @@ import { emptyIntent } from './types';
 import { stepMovement } from './movement';
 import { stepCombat, stepReloads } from './combat';
 import { stepInteractions, completeInteractions } from './interact';
-import { stepGadgetCommands, stepEntities } from './gadgets';
+import { stepGadgetCommands, stepEntities, stepPuck } from './gadgets';
 import { updatePerception, propagateSound } from './perception';
 import { stepRules } from './rules';
 
@@ -120,6 +120,18 @@ export class World implements GeoState {
     this.knownSoft = [this.soft.map(() => 'intact'), this.soft.map(() => 'intact')];
     this.knownBarricade = [this.barricades.map(() => false), this.barricades.map(() => false)];
     this.spawnActors();
+    // one shared scouting puck for the attacking side during prep (docs/02 Preparation)
+    const entry = this.map.entries.find((e) => e.id === cfg.attackEntry) ?? this.map.entries[0];
+    this.entities.push({
+      kind: 'puck',
+      id: this.newEntityId(),
+      team: cfg.attackTeam,
+      ownerId: -1,
+      pos: { x: entry.spots[0][0] + 0.6, y: entry.spots[0][1] - 0.6 },
+      hp: 20,
+      driverId: -1,
+      stepAccum: 0,
+    });
     updatePerception(this);
   }
 
@@ -265,6 +277,7 @@ export class World implements GeoState {
     stepGadgetCommands(this, get);
     // 2. movement + active gadget motion
     stepMovement(this, get);
+    stepPuck(this, get);
     stepEntities(this);
     // 3. geometry revisions are applied atomically inside the gadget/wall handlers
     // 4. perception from the updated geometry

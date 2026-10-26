@@ -897,3 +897,28 @@ body {
 .setup-grid .panel .row {
   justify-content: flex-start;
 }
+
+.hud.previewing .objective-line,
+.hud.previewing .resources,
+.hud.previewing .prep-ready {
+  visibility: hidden;
+}
+.prep-ready .btn {
+  min-height: 48px;
+  padding: 6px 16px;
+  font-size: calc(16px * var(--text-scale));
+}
+.cap {
+  background: rgba(21, 26, 40, 0.7);
+  max-width: 100%;
+}
+@media (max-height: 430px) {
+  .captions {
+    bottom: calc(132px + var(--safe-b));
+    width: min(38vw, 330px);
+  }
+  .cap {
+    font-size: calc(12px * var(--text-scale));
+    padding: 2px 6px;
+  }
+}

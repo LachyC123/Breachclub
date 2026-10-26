@@ -15,7 +15,6 @@ const BARRICADE_GUNFIRE_FACTOR = 0.5;
 export function canShoot(w: World, a: Actor): boolean {
   return (
     a.alive &&
-    w.phase !== 'prep' &&
     !a.vaulting &&
     !a.interaction &&
     a.reloadUntil < 0 &&
@@ -147,7 +146,9 @@ function traceBullet(w: World, a: Actor, from: Vec, to: Vec, baseDamage: number)
     tWall = hit.t;
     if (hit.entityId !== null) {
       surface = 'gadget';
-      if (w.phase !== 'prep') damageEntity(w, hit.entityId, baseDamage, a.id);
+      // during prep only the scouting puck can be damaged
+      const ent = w.entities.find((e) => e.id === hit.entityId);
+      if (w.phase !== 'prep' || ent?.kind === 'puck') damageEntity(w, hit.entityId, baseDamage, a.id);
     } else if (hit.cell) {
       const ci = hit.cell.y * w.map.w + hit.cell.x;
       const g = w.map.softGroupOf[ci];

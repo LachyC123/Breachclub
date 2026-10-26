@@ -9,6 +9,7 @@ import {
   buildCoverSheet,
   buildHingeSheet,
   buildCharge,
+  buildPuck,
   buildMuzzle,
   buildDust,
   buildRing,
@@ -22,7 +23,7 @@ import {
 import type { World } from '../sim/world';
 import type { Actor, SimEvent, Vec, HingeEntity, Obb } from '../sim/types';
 import { raycast, type GeoState, obbCorners } from '../sim/geometry';
-import { canSee } from '../sim/perception';
+import { canSee, PUCK_VISION } from '../sim/perception';
 import { RULES } from '../content/defs';
 
 const VISION = RULES.vision_tiles;
@@ -102,6 +103,8 @@ export function generateTextures(scene: Phaser.Scene, world: World) {
   addSheet(scene, 'sled', buildSledSheet(), SLED_SIZE, SLED_SIZE);
   addSheet(scene, 'cover', buildCoverSheet(), COVER_SIZE, COVER_SIZE);
   addSheet(scene, 'hinge', buildHingeSheet(), HINGE_SIZE, HINGE_SIZE);
+  addCanvas(scene, 'puck0', buildPuck(false));
+  addCanvas(scene, 'puck1', buildPuck(true));
   addCanvas(scene, 'charge0', buildCharge(false));
   addCanvas(scene, 'charge1', buildCharge(true));
   for (let f = 0; f < 3; f++) addCanvas(scene, `muzzle${f}`, buildMuzzle(f));
@@ -427,8 +430,8 @@ export class WorldView {
       const seen = e.team === 0 || w.visibleEntities[0].has(e.id);
       let spr = this.ents.get(e.id) as Phaser.GameObjects.Sprite | undefined;
       if (!spr) {
-        const key = e.kind === 'charge' ? 'charge0' : e.kind;
-        spr = this.scene.add.sprite(0, 0, key, e.kind === 'charge' ? undefined : 0);
+        const key = e.kind === 'charge' ? 'charge0' : e.kind === 'puck' ? 'puck0' : e.kind;
+        spr = this.scene.add.sprite(0, 0, key, e.kind === 'charge' || e.kind === 'puck' ? undefined : 0);
         this.ents.set(e.id, spr);
       }
       spr.setVisible(seen);
@@ -449,6 +452,8 @@ export class WorldView {
         // mirror for angles in the second quadrant
         const a = (((e.angle % Math.PI) + Math.PI) % Math.PI);
         spr.setFlipX(a > Math.PI / 2 + 0.01);
+      } else if (e.kind === 'puck') {
+        spr.setTexture(Math.floor(this.time * 3) % 2 ? 'puck1' : 'puck0').setPosition(e.pos.x * T, e.pos.y * T).setDepth(100 + e.pos.y * T);
       } else if (e.kind === 'charge') {
         spr.setTexture(Math.floor(this.time * 8) % 2 ? 'charge1' : 'charge0').setPosition(e.pos.x * T, e.pos.y * T).setDepth(100 + e.pos.y * T);
       }
@@ -594,21 +599,24 @@ export class WorldView {
     ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = '#000';
-    const eyes = w.actors.filter((a) => a.team === 0 && a.alive);
+    const eyes: Array<{ pos: Vec; range: number }> = w.actors.filter((a) => a.team === 0 && a.alive).map((a) => ({ pos: a.pos, range: VISION }));
+    const puck = w.entities.find((e) => e.kind === 'puck' && e.team === 0);
+    if (puck && puck.kind === 'puck') eyes.push({ pos: puck.pos, range: PUCK_VISION });
     const obs = w.obstacles();
     this.polyCache = [];
     for (const e of eyes) {
       const pts: Vec[] = [];
       const N = 300;
+      const R = e.range;
       for (let i = 0; i < N; i++) {
         const ang = (i / N) * Math.PI * 2;
         const dx = Math.cos(ang);
         const dy = Math.sin(ang);
-        const end = { x: e.pos.x + dx * VISION, y: e.pos.y + dy * VISION };
+        const end = { x: e.pos.x + dx * R, y: e.pos.y + dy * R };
         const hit = raycast(w as GeoState, e.pos, end, 'sight', { obs });
-        let d = hit ? hit.t * VISION : VISION;
+        let d = hit ? hit.t * R : R;
         // reveal the face of the surface that stopped the ray
-        if (hit) d = Math.min(VISION, d + 0.55);
+        if (hit) d = Math.min(R, d + 0.55);
         pts.push({ x: e.pos.x + dx * d, y: e.pos.y + dy * d });
       }
       this.polyCache.push(pts);

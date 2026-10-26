@@ -17,7 +17,7 @@ import {
   raycast,
   type GeoState,
 } from './geometry';
-import type { Actor, ActorIntent, CoverEntity, HingeEntity, Obb, SledEntity, Vec, ChargeEntity } from './types';
+import type { Actor, ActorIntent, CoverEntity, HingeEntity, Obb, SledEntity, Vec, ChargeEntity, PuckEntity } from './types';
 import type { World } from './world';
 import { ACTOR_RADIUS, moveCircle } from './movement';
 
@@ -85,6 +85,12 @@ export function damageEntity(w: World, id: number, amount: number, by: number) {
     if (e.hp <= 0) {
       removeEntity(w, e.id);
       w.emit({ type: 'hingeDestroyed', hingeId: e.id, pos: { ...e.center } });
+    }
+  } else if (e.kind === 'puck') {
+    e.hp -= amount;
+    if (e.hp <= 0) {
+      removeEntity(w, e.id);
+      w.emit({ type: 'puckDestroyed', puckId: e.id, pos: { ...e.pos } });
     }
   }
   void by;
@@ -610,6 +616,34 @@ function detonateCharge(w: World, c: ChargeEntity) {
 }
 
 // ---------- per-tick entity update ----------
+
+export const PUCK_SPEED = 4;
+export const PUCK_RADIUS = 0.2;
+
+/** Drive the shared scouting puck: the first living attacker sending a drive vector this tick. */
+export function stepPuck(w: World, get: (a: Actor) => ActorIntent) {
+  const puck = w.entities.find((e): e is PuckEntity => e.kind === 'puck');
+  if (!puck) return;
+  puck.driverId = -1;
+  for (const a of w.actors) {
+    if (!a.alive || a.team !== puck.team) continue;
+    const d = get(a).puck;
+    if (!d) continue;
+    puck.driverId = a.id;
+    const m = Math.min(1, Math.hypot(d.x, d.y));
+    if (m < 0.05) break;
+    const len = Math.hypot(d.x, d.y) || 1;
+    const before = { ...puck.pos };
+    moveCircle(w, null, puck.pos, (d.x / len) * m * PUCK_SPEED * DT, (d.y / len) * m * PUCK_SPEED * DT, PUCK_RADIUS, puck.id);
+    puck.stepAccum += Math.hypot(puck.pos.x - before.x, puck.pos.y - before.y);
+    if (puck.stepAccum > 1.5) {
+      puck.stepAccum = 0;
+      w.emitSound(puck.pos, 'gadget', 3, puck.team, a.id);
+    }
+    w.invalidateObstacles();
+    break;
+  }
+}
 
 export function stepEntities(w: World) {
   // Ram windups resolve into launches

@@ -18,12 +18,15 @@ export interface NavGrid {
 
 const cache = new Map<string, NavGrid>();
 
-function key(w: World, side: Side) {
+/** 'free' ignores prep confinement (the scouting puck may enter the building). */
+export type NavSide = Side | 'free';
+
+function key(w: World, side: NavSide) {
   const rotating = w.entities.some((e) => e.kind === 'hinge' && e.state !== 'idle');
   return `${w.uid}:${w.geometryRevision}:${w.phase === 'prep' ? 'p' : 'a'}:${side}:${rotating ? w.tick : 0}`;
 }
 
-export function navGrid(w: World, side: Side): NavGrid {
+export function navGrid(w: World, side: NavSide): NavGrid {
   const k = key(w, side);
   const hit = cache.get(k);
   if (hit) return hit;
@@ -43,7 +46,7 @@ export function navGrid(w: World, side: Side): NavGrid {
         else if (d >= 0 && w.barricades[d]) breachable[i] = 100 + d;
         continue;
       }
-      if (w.phase === 'prep' && w.prepConfine) {
+      if (w.phase === 'prep' && w.prepConfine && side !== 'free') {
         const inside = m.interior[i] === 1;
         if (side === 'attack' ? inside : !inside) continue;
       }
@@ -101,7 +104,7 @@ function nearestWalkable(g: NavGrid, p: Vec): number {
  * A* over 8-neighbour cells without corner cutting. With `breachCost`, intact soft panels and
  * barricades become passable at that extra cost (used to plan a breach, never to walk through).
  */
-export function findPath(w: World, side: Side, from: Vec, to: Vec, opts: { breachCost?: number; maxNodes?: number } = {}): PathResult | null {
+export function findPath(w: World, side: NavSide, from: Vec, to: Vec, opts: { breachCost?: number; maxNodes?: number } = {}): PathResult | null {
   const g = navGrid(w, side);
   const start = nearestWalkable(g, from);
   const goal = nearestWalkable(g, to);

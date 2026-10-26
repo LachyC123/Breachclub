@@ -55,6 +55,8 @@ export interface ActorIntent {
   interact: boolean;
   reload: boolean;
   gadget: GadgetCommand | null;
+  /** prep only: drive the shared scouting puck instead of walking */
+  puck: Vec | null;
 }
 
 export const emptyIntent = (): ActorIntent => ({
@@ -64,6 +66,7 @@ export const emptyIntent = (): ActorIntent => ({
   interact: false,
   reload: false,
   gadget: null,
+  puck: null,
 });
 
 export interface Actor {
@@ -188,7 +191,19 @@ export interface ChargeEntity {
   detonateTick: number;
 }
 
-export type Entity = SledEntity | CoverEntity | HingeEntity | ChargeEntity;
+/** Shared attacker scouting puck (prep only). Sees through doors, never through walls. */
+export interface PuckEntity {
+  kind: 'puck';
+  id: number;
+  team: TeamId;
+  ownerId: number;
+  pos: Vec;
+  hp: number;
+  driverId: number;
+  stepAccum: number;
+}
+
+export type Entity = SledEntity | CoverEntity | HingeEntity | ChargeEntity | PuckEntity;
 
 export interface SoundEvent {
   id: number;
@@ -246,6 +261,8 @@ export type SimEvent =
   | { type: 'hingeBlocked'; id: number; hingeId: number; reason: string; cells: Vec[] }
   | { type: 'hingeDestroyed'; id: number; hingeId: number; pos: Vec }
   | { type: 'chargePlanted'; id: number; chargeId: number; actorId: number }
+  | { type: 'puckDestroyed'; id: number; puckId: number; pos: Vec }
+  | { type: 'puckExpired'; id: number; puckId: number }
   | { type: 'vault'; id: number; actorId: number }
   | { type: 'phase'; id: number; phase: Phase }
   | { type: 'roundEnded'; id: number; winner: TeamId; reason: RoundReason }

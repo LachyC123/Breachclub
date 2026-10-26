@@ -34,8 +34,8 @@ const LINES: Record<string, Record<string, string[]>> = {
     reload: ['Reloading!', 'Changing mag!'],
     hear: ['Footsteps — {room}.', 'Hearing steps in {room}.', 'Someone moving, {room}.'],
     down: ['{name} is down!', "We lost {name}!"],
-    reinforce: ['Reinforcing {room}.', 'Bracing this wall.'],
-    barricade: ['Boarding up {room}.', 'Barricade going up.'],
+    reinforce: ['Reinforcing {room}.', 'Bracing {room}.'],
+    barricade: ['Boarding up {room}.', 'Barricade on {room}.'],
     breachSet: ['Charge set — stand clear!', 'Breaching!'],
     arming: ['Arming the console — cover me!', "On the console!"],
     shutting: ['Shutting it down — cover me!'],
@@ -121,7 +121,9 @@ export class Callouts {
         case 'spotted': {
           const target = w.actor(e.actorId);
           if (!target) break;
-          if (e.team === 0) say(e.spotterId, 'spot', { room: room(target.pos) }, 6);
+          if (e.team === 0 && e.spotterId < 0) {
+            if (this.ready('puckspot', 3, 0.5)) this.show('PUCK', `Defender spotted — ${room(target.pos)}`, 'system');
+          } else if (e.team === 0) say(e.spotterId, 'spot', { room: room(target.pos) }, 6);
           else say(e.spotterId, 'spot', {}, 6);
           break;
         }
@@ -170,7 +172,12 @@ export class Callouts {
           const a = w.actor(e.actorId);
           if (!a) break;
           const key = e.kind === 'arm' ? 'arming' : e.kind === 'shutoff' ? 'shutting' : e.kind === 'reinforce' ? 'reinforce' : e.kind === 'barricade' ? 'barricade' : e.kind === 'breach' ? 'breachSet' : '';
-          if (key) say(a.id, key, { room: room(a.pos) }, 4);
+          // name the actual wall/door being worked on (e.g. "the shop–office wall")
+          let where = room(a.pos);
+          const t = a.interaction?.target ?? -1;
+          if (e.kind === 'reinforce' && t >= 0) where = `the ${w.map.softGroups[t].rooms.map((r) => w.map.rooms.find((x) => x.id === r)?.name.toLowerCase() ?? r).join('–')} wall`;
+          if (e.kind === 'barricade' && t >= 0) where = `the ${w.map.doors[t].rooms.map((r) => w.map.rooms.find((x) => x.id === r)?.name.toLowerCase() ?? r).join('–')} door`;
+          if (key) say(a.id, key, { room: where }, 4);
           break;
         }
         case 'armed': {

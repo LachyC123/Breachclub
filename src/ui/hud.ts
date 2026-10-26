@@ -154,7 +154,7 @@ export class Hud {
     });
     this.set('score', `${score[0]}-${score[1]}`, () => (this.score.textContent = `${score[0]} – ${score[1]}`));
     let obj = '';
-    if (w.phase === 'prep') obj = side === 'attack' ? 'PREP — pick your approach. Gadgets unlock at action.' : 'PREP — reinforce walls, barricade doors, set your gadget';
+    if (w.phase === 'prep') obj = side === 'attack' ? 'PREP — scout with the puck. Gadgets unlock at action.' : 'PREP — reinforce walls, barricade doors, set your gadget';
     else if (w.phase === 'action') obj = side === 'attack' ? 'Reach the office console and hold Interact to arm it' : 'Defend the office console';
     else if (w.phase === 'armed') obj = side === 'attack' ? 'BROADCASTING — keep the console armed!' : 'ARMED — hold Interact at the console to shut it off!';
     this.set('obj', obj, () => (this.objective.textContent = obj));

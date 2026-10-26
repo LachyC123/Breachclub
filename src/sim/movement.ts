@@ -141,8 +141,9 @@ export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
       continue;
     }
 
-    let mx = it.move.x;
-    let my = it.move.y;
+    // driving the scouting puck: the operator stands still
+    let mx = it.puck ? 0 : it.move.x;
+    let my = it.puck ? 0 : it.move.y;
     const mag = Math.hypot(mx, my);
     if (mag > 1) {
       mx /= mag;

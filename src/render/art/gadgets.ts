@@ -106,6 +106,20 @@ export function buildCharge(blink: boolean): HTMLCanvasElement {
   return p.c;
 }
 
+/** Scouting puck: squat wheeled camera disc with an amber lens and blinking antenna. */
+export function buildPuck(blink: boolean): HTMLCanvasElement {
+  const p = new Pix(12, 10);
+  p.ellipse(6, 6, 5, 3, P.navy2);
+  p.hl(2, 9, 4, P.slate2);
+  p.ellipse(6, 5, 3, 2, P.slate);
+  p.px(6, 5, P.amberLight).px(7, 5, P.amber);
+  p.vl(3, 0, 3, P.slate3);
+  p.px(3, 0, blink ? P.tealLight : P.tealDark);
+  p.rect(1, 7, 2, 2, P.ink).rect(9, 7, 2, 2, P.ink);
+  p.outline(P.outline);
+  return p.c;
+}
+
 export function buildMuzzle(frame: number): HTMLCanvasElement {
   const p = new Pix(9, 9);
   const c = 4;
@@ -174,7 +188,8 @@ export type IconName =
   | 'brake'
   | 'ready'
   | 'cancel'
-  | 'sound';
+  | 'sound'
+  | 'puck';
 
 export function buildIcon(name: IconName): HTMLCanvasElement {
   const p = new Pix(16, 16);
@@ -276,6 +291,15 @@ export function buildIcon(name: IconName): HTMLCanvasElement {
     }
     case 'cancel': {
       p.line(3, 3, 12, 12, P.coral).line(4, 3, 13, 12, P.coral).line(12, 3, 3, 12, P.coral).line(13, 3, 4, 12, P.coral);
+      break;
+    }
+    case 'puck': {
+      p.ellipse(8, 10, 6, 3, P.navy2);
+      p.ellipse(8, 8, 4, 3, P.slate);
+      p.ellipse(8, 8, 1, 1, A);
+      p.vl(4, 2, 7, P.slate3);
+      p.px(4, 2, P.tealLight);
+      p.line(10, 4, 13, 2, P.tealLight).line(11, 6, 14, 5, P.tealLight);
       break;
     }
     case 'sound': {
