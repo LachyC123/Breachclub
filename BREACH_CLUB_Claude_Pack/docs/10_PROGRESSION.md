@@ -1,0 +1,12 @@
+# 10 — Progression without breaking tactics
+The reward should be new decisions, character attachment, and mastery, not a health/stat grind that makes bots obsolete. All six core operators are available after the optional tutorial. Do not lock the counter necessary to finish an introductory scenario. Expansion operators unlock by choosing contracts, not random loot boxes.
+
+Account XP: proposed 100 per completed match plus 25 for a win; abandoned rounds give no match reward. Tutorial grants a one-time 100. This is a pacing hypothesis. Level threshold starts at 200 + 50×(current level−1) XP for the next level. Store earned XP, not only level; derive progress from the formula. No energy, streak punishment, premium currency, daily requirement, or real money system in initial release.
+
+Each completed match also advances one selected expansion contract by one. Three completions unlock that chosen operator; loss still counts. Six expansion operators therefore require at most eighteen completed matches when focusing contracts. Before unlock, every operator is playable in an isolated Try room with its counters demonstrated. Challenges are optional bonus cosmetics rather than mandatory trick-shot gates.
+
+Operator mastery tracks meaningful actions: useful breach followed by teammate traversal; decoy investigation; safe ally relocation; trap escape counterplay; objective defence; successful device disable. Award each event type a bounded number per round to prevent farming your own stationary gadget. Do not award indefinite mastery for shooting and repairing the same cover. Mastery rewards portrait frames, outfit colourways preserving team readability, gadget decals, victory poses, and short lore cards. No upgraded stun duration, extra gadget charges, stronger wall HP, or damage bonuses.
+
+Practice modes: weapon range, operator Try room, single round with side/map/difficulty selector. Core content can later include authored challenge cards: breach without casualties, win with no reinforcement, complete a coordinated entry. Daily rotation is optional local seeded content and must never require server time or prevent playing an old favourite.
+
+Result screen celebrates actual events with clear numbers. Save match ID with the reward transaction so reload cannot grant the same XP twice. Local single-player saves are user-owned; anti-cheat infrastructure is unnecessary. Provide export/import and reset confirmation. No account creation or network required to view progression after initial assets load.

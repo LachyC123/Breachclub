@@ -1,0 +1,212 @@
+[
+  {
+    "id": "spin_cycle",
+    "name": "Spin Cycle",
+    "tier": "slice",
+    "rooms": [
+      "street",
+      "shop",
+      "service",
+      "office",
+      "stock",
+      "alley"
+    ],
+    "edges": [
+      [
+        "street",
+        "shop",
+        "door"
+      ],
+      [
+        "shop",
+        "service",
+        "door"
+      ],
+      [
+        "service",
+        "office",
+        "door"
+      ],
+      [
+        "office",
+        "stock",
+        "door"
+      ],
+      [
+        "stock",
+        "alley",
+        "door"
+      ],
+      [
+        "alley",
+        "street",
+        "open"
+      ],
+      [
+        "shop",
+        "stock",
+        "soft"
+      ],
+      [
+        "service",
+        "alley",
+        "window"
+      ]
+    ],
+    "objective": "office",
+    "spawns": [
+      "street",
+      "alley"
+    ],
+    "protected_edges": [
+      [
+        "service",
+        "office"
+      ],
+      [
+        "office",
+        "stock"
+      ]
+    ]
+  },
+  {
+    "id": "last_orders",
+    "name": "Last Orders",
+    "tier": "expansion",
+    "rooms": [
+      "plaza",
+      "dining",
+      "kitchen",
+      "pantry",
+      "office",
+      "delivery"
+    ],
+    "edges": [
+      [
+        "plaza",
+        "dining",
+        "door"
+      ],
+      [
+        "dining",
+        "kitchen",
+        "door"
+      ],
+      [
+        "kitchen",
+        "pantry",
+        "door"
+      ],
+      [
+        "pantry",
+        "office",
+        "door"
+      ],
+      [
+        "office",
+        "dining",
+        "door"
+      ],
+      [
+        "delivery",
+        "pantry",
+        "door"
+      ],
+      [
+        "delivery",
+        "plaza",
+        "open"
+      ],
+      [
+        "dining",
+        "pantry",
+        "soft"
+      ]
+    ],
+    "objective": "office",
+    "spawns": [
+      "plaza",
+      "delivery"
+    ],
+    "protected_edges": [
+      [
+        "pantry",
+        "office"
+      ],
+      [
+        "office",
+        "dining"
+      ]
+    ]
+  },
+  {
+    "id": "after_hours",
+    "name": "After Hours",
+    "tier": "expansion",
+    "rooms": [
+      "entrance",
+      "gallery",
+      "workshop",
+      "archive",
+      "loading",
+      "courtyard"
+    ],
+    "edges": [
+      [
+        "entrance",
+        "gallery",
+        "door"
+      ],
+      [
+        "gallery",
+        "archive",
+        "door"
+      ],
+      [
+        "archive",
+        "workshop",
+        "door"
+      ],
+      [
+        "workshop",
+        "loading",
+        "door"
+      ],
+      [
+        "loading",
+        "courtyard",
+        "open"
+      ],
+      [
+        "courtyard",
+        "entrance",
+        "open"
+      ],
+      [
+        "gallery",
+        "workshop",
+        "soft"
+      ],
+      [
+        "courtyard",
+        "gallery",
+        "window"
+      ]
+    ],
+    "objective": "archive",
+    "spawns": [
+      "entrance",
+      "loading"
+    ],
+    "protected_edges": [
+      [
+        "gallery",
+        "archive"
+      ],
+      [
+        "archive",
+        "workshop"
+      ]
+    ]
+  }
+]

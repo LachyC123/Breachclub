@@ -1,0 +1,142 @@
+[
+  {
+    "path": "BREACH_CLUB_MASTER_PLAN.md",
+    "bytes": 74832,
+    "sha256": "80ee1b61a78449a4f260f3e66bcdb88141511b17c7d07d8ec4973c9f7bff4ed6"
+  },
+  {
+    "path": "CLAUDE.md",
+    "bytes": 1978,
+    "sha256": "0943417dfee1270ae2dd7258f1a9e3e8ca9d068c6e46b94c26f977b1248294d2"
+  },
+  {
+    "path": "PACK_VALIDATION.md",
+    "bytes": 382,
+    "sha256": "7464bfb5107a07fe73a34d0024077dfa59005a8652c9ae8326df2bdf9e238ff7"
+  },
+  {
+    "path": "PROGRESS.md",
+    "bytes": 368,
+    "sha256": "f469c951e6f9dc21709df3f0087212411191a5524de3f196271769a37915e435"
+  },
+  {
+    "path": "README.md",
+    "bytes": 2469,
+    "sha256": "11554d17485c1c931fbb5f0e473444263af4a03559b3ef339ccf28d03e3b04d6"
+  },
+  {
+    "path": "START_HERE_PROMPT.md",
+    "bytes": 1718,
+    "sha256": "193179a4f8068f7a21059c931078fe38eb69b03c9800c1a13d385a8001199843"
+  },
+  {
+    "path": "data/README.md",
+    "bytes": 659,
+    "sha256": "18b0aec4b1be725e28224d5310629c4cd886ff95d6ea73787eb1c4d0f6b43557"
+  },
+  {
+    "path": "data/maps.json",
+    "bytes": 2990,
+    "sha256": "deb068ea523962260031252edf9c0ada6c72c54f36e655f6bdf3854051b045a9"
+  },
+  {
+    "path": "data/operators.json",
+    "bytes": 23135,
+    "sha256": "724ba41c42a8d9e5c1144e02c54e25f5f601446a94149563c7f599cf5704ecbb"
+  },
+  {
+    "path": "data/rules.json",
+    "bytes": 411,
+    "sha256": "704f0975a9f9a8214fb0866281781931e13ca27ab0515e5eedae40015999a110"
+  },
+  {
+    "path": "data/weapons.json",
+    "bytes": 851,
+    "sha256": "6a9a9be7087c519cf0a8ff1664c5bdc68210c3c96d4453b1d9d798fb793e814c"
+  },
+  {
+    "path": "docs/01_CHARTER.md",
+    "bytes": 3363,
+    "sha256": "1c5ed334e921261bfda9c68f37c382b6211892188d978416596b34e78313dce0"
+  },
+  {
+    "path": "docs/02_MATCH_AND_OBJECTIVES.md",
+    "bytes": 4725,
+    "sha256": "c71f380f625f0305a6503dd7241dbbc3ac334c68c65d56b5dd95f817da5c8950"
+  },
+  {
+    "path": "docs/03_OPERATOR_BIBLE.md",
+    "bytes": 22427,
+    "sha256": "ea0840c75b25311918870f250505c648f02419d3268c7c6c040b60d07ebf3da3"
+  },
+  {
+    "path": "docs/04_COMBINATIONS.md",
+    "bytes": 4686,
+    "sha256": "354e32291c58992eb1fd2e615c901e57aba910c63d3821185cb603961642b240"
+  },
+  {
+    "path": "docs/05_MOBILE_UI.md",
+    "bytes": 5365,
+    "sha256": "dd9f3d95faa26f02431522d7fbaaf4452abe5bacf904965ef22d7e6f37f41192"
+  },
+  {
+    "path": "docs/06_COMBAT_AND_DESTRUCTION.md",
+    "bytes": 5032,
+    "sha256": "9e457c0de0aa94a363c66cb4227921efdccea05faf4726a7fcfd271561de63d4"
+  },
+  {
+    "path": "docs/07_BOTS.md",
+    "bytes": 4527,
+    "sha256": "f31be1d5304f38ce6f1cc6a359f5be371d6d0396e74173ff37548ef50e67996a"
+  },
+  {
+    "path": "docs/08_MAPS.md",
+    "bytes": 4198,
+    "sha256": "bc8494633f7b2466ef8be9125487007e026d1edea7129b2e161fdd6e2f39b486"
+  },
+  {
+    "path": "docs/09_ART_AUDIO.md",
+    "bytes": 4572,
+    "sha256": "b3d94554db7b22418426d060f481b52e6f8692798df217a4864c2182631646dc"
+  },
+  {
+    "path": "docs/10_PROGRESSION.md",
+    "bytes": 2531,
+    "sha256": "a28391aad2ec6296929b8121e6a22d57477b8ddf773d3644fade097300833b8e"
+  },
+  {
+    "path": "docs/11_ARCHITECTURE.md",
+    "bytes": 5315,
+    "sha256": "f54e9ea07c43669536c6b17e169f2107ff06475ac3d3b14d2f46a7b2d2100404"
+  },
+  {
+    "path": "docs/12_MILESTONES.md",
+    "bytes": 3568,
+    "sha256": "2b991b2893f7c6e87ce36ddb3a4965b34326443652e77e7296381b94426b37a9"
+  },
+  {
+    "path": "docs/13_QA.md",
+    "bytes": 4343,
+    "sha256": "bbbea292f0ebcd1d33abed3daaa8c39e012351c08f25d5853e656f55e533eef5"
+  },
+  {
+    "path": "templates/ABILITY_CONTRACT.md",
+    "bytes": 416,
+    "sha256": "8d5d2e198fd441bed5c35f10fae57b470f9fff4a526343c66115f9ae99e58674"
+  },
+  {
+    "path": "templates/ASSET_MANIFEST.md",
+    "bytes": 414,
+    "sha256": "000fd3daadf145ed78b1048893abdb753925134ae0265453bf50108da4611f52"
+  },
+  {
+    "path": "templates/MILESTONE_REPORT.md",
+    "bytes": 403,
+    "sha256": "e9d8149fd2fc4bfd37707808d0c98023cd4697c1fc6c5ed8b40971a6b95c548d"
+  },
+  {
+    "path": "tools/validate_pack.py",
+    "bytes": 2067,
+    "sha256": "c920c18f9c06e79cfe6074ecc5184310d7ac079d9c1a6f78945b681f5d79e246"
+  }
+]

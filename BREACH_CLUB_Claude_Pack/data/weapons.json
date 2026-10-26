@@ -1,0 +1,50 @@
+[
+  {
+    "id": "smg",
+    "name": "Pocket SMG",
+    "damage": 18,
+    "pellets": 1,
+    "interval_seconds": 0.11,
+    "magazine": 24,
+    "reload_seconds": 1.4,
+    "effective_range_tiles": 6,
+    "operators": [
+      "spool",
+      "echo",
+      "stitch",
+      "relay"
+    ]
+  },
+  {
+    "id": "carbine",
+    "name": "Carbine",
+    "damage": 25,
+    "pellets": 1,
+    "interval_seconds": 0.18,
+    "magazine": 18,
+    "reload_seconds": 1.6,
+    "effective_range_tiles": 8,
+    "operators": [
+      "ram",
+      "hinge",
+      "jolt",
+      "chisel"
+    ]
+  },
+  {
+    "id": "scattergun",
+    "name": "Scattergun",
+    "damage": 12,
+    "pellets": 5,
+    "interval_seconds": 0.65,
+    "magazine": 6,
+    "reload_seconds": 1.8,
+    "effective_range_tiles": 3,
+    "operators": [
+      "magnet",
+      "hush",
+      "lumen",
+      "patch"
+    ]
+  }
+]
