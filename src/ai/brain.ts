@@ -476,8 +476,8 @@ export class AIDirector {
     const console = w.map.console;
     // armed: hold around the console
     if (w.phase === 'armed') {
-      const mates = w.actors.filter((x) => x.team === team && x.alive && x.controller === 'bot');
-      const idx = mates.findIndex((x) => x.id === a.id);
+      const mates = w.actors.filter((x) => x.team === team && x.alive && (x.controller === 'bot' || x.id === a.id));
+      const idx = Math.max(0, mates.findIndex((x) => x.id === a.id));
       const spot = ATTACK_HOLD_SPOTS[idx % ATTACK_HOLD_SPOTS.length];
       b.task = { kind: 'hold', pos: spot, face: angleTo(spot, w.map.doors.find((d) => d.id === (idx % 2 ? 'Q' : 'P'))!.center), label: 'Holding' };
       return;

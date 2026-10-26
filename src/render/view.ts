@@ -237,7 +237,7 @@ export class WorldView {
         case 'shot': {
           if (!vis(e.actorId)) break;
           const a = w.actor(e.actorId)!;
-          this.tracers.push({ a: e.from, b: e.to, t: 0.07, col: a.team === 0 ? hex(P.amberLight) : hex(P.coralLight) });
+          this.tracers.push({ a: e.from, b: e.to, t: 0.08, col: a.team === 0 ? hex(P.amberLight) : hex(P.coralLight) });
           if (this.flashes.length < 12) {
             const len = weaponLength(a.weapon.id) / T;
             const mx = (a.pos.x + Math.cos(a.facing) * (0.2 + len)) * T;
@@ -269,8 +269,14 @@ export class WorldView {
           const g = w.map.softGroups[e.group];
           const seen = this.pointVisible(g.center) || w.actor(e.by)?.team === 0;
           if (seen) {
-            for (const c of g.cells) this.burst({ x: (c % w.map.w) + 0.5, y: Math.floor(c / w.map.w) + 0.5 }, 14, P.cream, 90, 0.7, 120);
-            this.dust(g.center);
+            for (const c of g.cells) {
+              const cp = { x: (c % w.map.w) + 0.5, y: Math.floor(c / w.map.w) + 0.5 };
+              this.burst(cp, 10, P.cream, 110, 0.8, 160, true);
+              this.burst(cp, 6, P.tan, 80, 0.7, 160, true);
+              this.burst(cp, 6, P.white, 60, 0.25);
+              this.dust(cp);
+            }
+            if (!this.reducedFlash) this.flashAt(g.center);
           }
           this.addShake(seen ? 2 : 1, 0.25);
           break;
@@ -338,7 +344,7 @@ export class WorldView {
     this.shake.t = Math.max(this.shake.t, t);
   }
 
-  private burst(p: Vec, n: number, col: string, speed: number, life: number, grav = 0) {
+  private burst(p: Vec, n: number, col: string, speed: number, life: number, grav = 0, big = false) {
     for (let i = 0; i < n; i++) {
       if (this.particles.length >= 120) {
         const old = this.particles.shift()!;
@@ -346,16 +352,23 @@ export class WorldView {
       }
       const a = Math.random() * Math.PI * 2;
       const sp = speed * (0.3 + Math.random() * 0.7);
-      const size = Math.random() < 0.3 ? 2 : 1;
+      const size = big ? 2 + Math.floor(Math.random() * 2) : Math.random() < 0.3 ? 2 : 1;
       const img = this.scene.add.rectangle(p.x * T, p.y * T - 4, size, size, hex(col)).setDepth(DEPTH_FX + 1).setOrigin(0);
       this.particles.push({ img, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - grav * 0.4, life: life * (0.6 + Math.random() * 0.4), max: life, grav });
     }
   }
 
   private dust(p: Vec) {
-    if (this.dusts.length > 6) return;
+    if (this.dusts.length > 8) return;
     const img = this.scene.add.image(p.x * T, p.y * T - 4, 'dust0').setDepth(DEPTH_FX).setScale(2);
     this.dusts.push({ img, t: 0 });
+  }
+
+  /** brief local light pop at a breach (skipped in reduced-flash mode) */
+  private flashAt(p: Vec) {
+    const img = this.scene.add.image(p.x * T, p.y * T - 4, 'muzzle0').setDepth(DEPTH_FX + 3).setScale(4).setAlpha(0.8);
+    img.setBlendMode(Phaser.BlendModes.ADD);
+    this.flashes.push({ img, t: 0.09 });
   }
 
   private pointVisible(p: Vec): boolean {
@@ -551,8 +564,15 @@ export class WorldView {
     const g = this.fx;
     g.clear();
     for (const t of this.tracers) {
-      g.lineStyle(1, t.col, Math.min(1, t.t / 0.05));
-      g.lineBetween(t.a.x * T, t.a.y * T - 4, t.b.x * T, t.b.y * T - 4);
+      // short bright head near the target over a faint trail: reads as hitscan, not a slow bullet
+      const hx = t.b.x * T;
+      const hy = t.b.y * T - 4;
+      g.lineStyle(1, t.col, 0.45 * Math.min(1, t.t / 0.05));
+      g.lineBetween(t.a.x * T, t.a.y * T - 4, hx, hy);
+      const len = Math.hypot(hx - t.a.x * T, hy - (t.a.y * T - 4)) || 1;
+      const k = Math.min(1, 10 / len);
+      g.lineStyle(2, hex(P.white), Math.min(1, t.t / 0.04));
+      g.lineBetween(hx - (hx - t.a.x * T) * k, hy - (hy - (t.a.y * T - 4)) * k, hx, hy);
       t.t -= dt;
     }
     this.tracers = this.tracers.filter((t) => t.t > 0);

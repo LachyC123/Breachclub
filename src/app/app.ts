@@ -98,7 +98,11 @@ export class App {
         if (this.state === 'playing' || this.state === 'spectate') this.pause('The game paused while it was in the background.');
       } else this.sfx.resume();
     });
-    window.addEventListener('resize', () => this.fitCamera());
+    window.addEventListener('resize', () => {
+      this.fitCamera();
+      // portrait is unsupported: the rotate overlay shows and play pauses
+      if (window.innerHeight > window.innerWidth && window.innerWidth < 900 && (this.state === 'playing' || this.state === 'spectate')) this.pause('Paused while the phone was in portrait.');
+    });
     window.addEventListener('orientationchange', () => {
       if (this.state === 'playing') this.pause('Paused while the screen rotated.');
     });
@@ -666,6 +670,8 @@ export class App {
   private tick() {
     const m = this.match!;
     const w = m.world;
+    // after the round ends nothing advances; never re-read the final tick's events
+    if (w.phase === 'ended') return;
     let intent: ActorIntent | null = null;
     if (this.controls && this.state === 'playing') {
       intent = this.controls.produce();

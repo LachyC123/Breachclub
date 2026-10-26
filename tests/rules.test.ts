@@ -145,3 +145,21 @@ describe('round rules', () => {
     expect(w.phase).toBe('action');
   });
 });
+
+import { Match } from '../src/app/session';
+
+describe('match flow', () => {
+  it('stepping after a round ends exposes no stale events and scores once', () => {
+    const m = new Match({ seed: 3, difficulty: 'club', playerStartSide: 'attack', attackOperator: 'ram', defenceOperator: 'hinge', attackEntry: 'front', prepSeconds: 0, actionSeconds: 1 });
+    let ended = 0;
+    for (let i = 0; i < 60 * 4; i++) {
+      if (m.step(null)) ended++;
+      if (m.world.phase === 'ended') expect(m.world.events.filter((e) => e.type === 'death' || e.type === 'roundEnded').length).toBeLessThanOrEqual(1);
+    }
+    expect(ended).toBe(1);
+    expect(m.score[0] + m.score[1]).toBe(1);
+    // one step later the buffer is empty
+    m.step(null);
+    expect(m.world.events.length).toBe(0);
+  });
+});

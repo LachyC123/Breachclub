@@ -81,7 +81,10 @@ export class Match {
   /** Step one tick; returns true when the round just ended. */
   step(humanIntent: ActorIntent | null): boolean {
     const w = this.world;
-    if (w.phase === 'ended') return false;
+    if (w.phase === 'ended') {
+      w.events = [];
+      return false;
+    }
     const intents = this.ai.think();
     const h = w.human();
     if (h && h.alive && humanIntent) intents.set(h.id, humanIntent);
