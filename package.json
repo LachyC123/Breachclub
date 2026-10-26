@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "validate": "python3 tools/validate_pack.py",
-    "sim": "SIM=1 vitest run"
+    "sim": "SIM=1 vitest run",
+    "build:single": "tsc --noEmit && SINGLE=1 vite build && node tools/build-single.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",
