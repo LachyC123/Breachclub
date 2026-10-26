@@ -183,6 +183,14 @@ export class AIDirector {
     for (const [k, v] of this.reserved) if (v === actorId) this.reserved.delete(k);
   }
 
+  /** Development autopilot: the same bot logic drives a human-controlled actor. */
+  intentFor(actorId: number): ActorIntent {
+    const a = this.w.actor(actorId);
+    const b = this.bots.get(actorId);
+    if (!a || !b || !a.alive) return emptyIntent();
+    return this.botTick(a, b);
+  }
+
   /** Produce intents for every living bot-controlled actor. */
   think(): Map<number, ActorIntent> {
     const w = this.w;
@@ -430,9 +438,10 @@ export class AIDirector {
     const living = w.actors.filter((x) => x.team === team && x.alive);
     const humanArming = living.some((x) => x.controller === 'human' && x.interaction?.kind === 'arm');
     let planter = w.actor(this.planterId[team]);
-    if (!planter || !planter.alive || planter.controller !== 'bot') {
+    if (!planter || !planter.alive || (planter.controller !== 'bot' && planter.id !== a.id)) {
       const bots = living.filter((x) => x.controller === 'bot');
-      planter = bots.sort((x, y) => dist(x.pos, console.center) - dist(y.pos, console.center))[0];
+      // dev autopilot drives the human with this same logic; it may plant when no bot can
+      planter = bots.sort((x, y) => dist(x.pos, console.center) - dist(y.pos, console.center))[0] ?? (a.controller === 'human' ? a : undefined);
       this.planterId[team] = planter?.id ?? -1;
     }
 
@@ -457,7 +466,7 @@ export class AIDirector {
       }
     }
 
-    if (planter && planter.id === a.id && !humanArming) {
+    if (planter && planter.id === a.id && (!humanArming || a.controller === 'human')) {
       b.task = { kind: 'arm' };
       return;
     }

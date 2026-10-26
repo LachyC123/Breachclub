@@ -15,6 +15,7 @@ const BARRICADE_GUNFIRE_FACTOR = 0.5;
 export function canShoot(w: World, a: Actor): boolean {
   return (
     a.alive &&
+    w.phase !== 'prep' &&
     !a.vaulting &&
     !a.interaction &&
     a.reloadUntil < 0 &&

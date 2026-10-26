@@ -252,9 +252,10 @@ export class World implements GeoState {
 
   /** Advance exactly one fixed tick. Update order follows docs/11_ARCHITECTURE.md. */
   step(intents: Map<number, ActorIntent>) {
-    if (this.phase === 'ended') return;
+    // clear first: a stale RoundEnded must never be re-read after the round is over
     this.events = [];
     this.sounds = [];
+    if (this.phase === 'ended') return;
     this.damagedThisTick.clear();
     this.tick++;
     for (const a of this.actors) a.prevPos = { ...a.pos };

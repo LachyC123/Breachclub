@@ -115,15 +115,15 @@ export class Match {
 export class FixedStepper {
   private acc = 0;
   readonly dt = 1 / 60;
-  advance(elapsedSec: number, step: () => void): number {
-    this.acc += Math.min(elapsedSec, 0.1);
+  advance(elapsedSec: number, step: () => void, maxSteps = 6): number {
+    this.acc += Math.min(elapsedSec, 0.1 * (maxSteps / 6));
     let n = 0;
-    while (this.acc >= this.dt && n < 6) {
+    while (this.acc >= this.dt && n < maxSteps) {
       step();
       this.acc -= this.dt;
       n++;
     }
-    if (n >= 6) this.acc = 0;
+    if (n >= maxSteps) this.acc = 0;
     return n;
   }
   get alpha(): number {

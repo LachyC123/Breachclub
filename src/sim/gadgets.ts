@@ -15,6 +15,7 @@ import {
   HINGE_HALF_THICK,
   cellBlocks,
   raycast,
+  type GeoState,
 } from './geometry';
 import type { Actor, ActorIntent, CoverEntity, HingeEntity, Obb, SledEntity, Vec, ChargeEntity } from './types';
 import type { World } from './world';
@@ -194,7 +195,7 @@ export function validateRamLaunch(w: World, a: Actor): Validation {
 }
 
 /** Straight-line preview for the sled: where it would breach and stop (no hidden actor info). */
-export function previewSledPath(w: World, from: Vec, angle: number): { points: Vec[]; breachGroup: number; breachDoor: number; stop: Vec; hard: boolean } {
+export function previewSledPath(w: GeoState, from: Vec, angle: number): { points: Vec[]; breachGroup: number; breachDoor: number; stop: Vec; hard: boolean } {
   const dir = { x: Math.cos(angle), y: Math.sin(angle) };
   const start = { x: from.x + dir.x * 0.55, y: from.y + dir.y * 0.55 };
   let traveled = 0;
