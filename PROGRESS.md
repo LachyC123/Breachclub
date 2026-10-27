@@ -1,6 +1,6 @@
 # Progress
 
-_Last updated: 27 October 2026 — feedback pass after the first playable review: tactical-shooter flow, drones, CODM-style controls, bot fixes._
+_Last updated: 27 October 2026 — second feedback pass: smarter bots, operator ratings, distinct guns, VFX._
 
 ## Status
 
@@ -10,6 +10,51 @@ _Last updated: 27 October 2026 — feedback pass after the first playable review
 | M1: complete mechanical loop | Done: one laundrette, 3v3, Ram + Hinge, full round rules |
 | M2: first playable review | Done, then reworked after your feedback (below). **Ready for a second look.** |
 | M3+: six-operator core onward | Not started (by design: review first) |
+
+## Feel pass (27 Oct 2026, later)
+
+Your feedback: bots still dumb (one defender walked straight to our entry door and died), more feel and VFX wanted, and operators and guns all felt the same.
+
+**Bots**
+- Measured first with a diagnostic over 24 bot-vs-bot rounds (`tests/defdeaths.sim.ts`): 44 of 57 defender deaths came in the first 30 s of action, 33 outside the office. Most were roamers holding the service room right next to the window spawn.
+- Root causes found and fixed:
+  - **Prep bug:** defenders could see attackers through the window during prep and emptied magazine after magazine at them (nobody can be hurt in prep), freezing in place until action started. Bots now only shoot drones in prep.
+  - **Suicidal rotations:** hold spots now score against known threats. A defender never picks a spot within 6 tiles of a known attacker, never crosses their sightlines to rotate, and falls back to site when two or more attackers are close.
+  - **Spawn camping:** spots overlooking an attacker spawn are avoided in prep and the first 20 s of action.
+  - **Sealed out:** a defender barricaded a door, wandered to the wrong side, then shot its own barricade. Bots never break their own team's barricades in prep and only pick spots they can reach.
+  - **Fighting smarter:** bots on both sides break line of sight when facing two or more enemies, and never turn their back at point blank.
+- Result: off-site defender deaths 33 → 19. Bot-vs-bot balance over 24 rounds is 12–12.
+- New regression test in `tests/ai.test.ts`; it fails on the old AI.
+
+**Operators feel different** (`src/content/handling.ts`)
+- Siege-style ARMOUR / SPEED ratings, fixed per operator (not progression):
+  - Mo and Dex: light (1 armour / 3 speed).
+  - Ram and June: medium (2/2).
+  - Tess and Hinge: heavy (3/1).
+- Effects: heavy operators take 20% less gunfire damage and move 12% slower; light ones the reverse.
+- The sprites show it: light operators wear a chest strap, medium a vest, heavy a plate carrier with shoulder plates. Walk cadence follows speed.
+- Ratings are shown as pips on operator select and in the operators browser.
+
+**Guns feel different**
+- **Carbine (marksman):** pin-point first shot; punished for moving and holding the trigger; heavy kick and stagger after each shot; the brightest, longest tracer.
+- **Pocket SMG (run-and-gun):** forgiving on the move, sprays wider the longer you hold it; light kick; quick thin tracers.
+- **Scattergun (pump):**
+  - Knocks targets back and throws bodies further.
+  - Big flash, smoke and camera shake.
+  - A pump clack in its sound, with the red shell ejecting a beat after the blast.
+  - Loads shell by shell; firing interrupts the reload.
+- Each gun also has its own aim-down-sights movement speed. Weapon stat bars are shown on operator select.
+- Tests: armour damage, speed difference, and shell reload with interrupt (`tests/handling.test.ts`).
+
+**VFX and feel** (`src/render/fx.ts`)
+- Shell casings that bounce and lie on the floor.
+- A pixel-banded muzzle light pop.
+- Muzzle smoke, plus sparks off walls and metal, plaster or wood puffs off soft surfaces.
+- Persistent decals: bullet holes, blood spatter and pools, charge scorch marks.
+- Breach shockwave ring, sparks and smoke.
+- Bodies thrown away from the shooter; per-weapon camera recoil kick.
+- A red screen-edge flash when you're hit, and an "ELIMINATED NAME +100" popup on your kills.
+- All of it respects fog: effects only appear where your team can see.
 
 ## Feedback pass (27 Oct 2026)
 
@@ -160,7 +205,7 @@ See `README.md`: `npm install`, `npm run dev`, `npm test`, `npm run build`, `npm
 | Check | Result |
 |---|---|
 | `npm run build` (tsc strict + Vite) | Passes |
-| `npm test` | 37 tests pass. New in this pass: drone lifecycle, tagging, spare deploy, drones gone at action (`tests/drones.test.ts`); escort arming (`tests/ai.test.ts`). The earlier round, gadget, perception, reachability and restart tests still pass. |
+| `npm test` | 41 tests pass (3 new handling tests and 1 new defence AI test in the feel pass). New in this pass: drone lifecycle, tagging, spare deploy, drones gone at action (`tests/drones.test.ts`); escort arming (`tests/ai.test.ts`). The earlier round, gadget, perception, reachability and restart tests still pass. |
 | Headless bot-vs-bot, 16 rounds (`SIM=1 SEEDS=1,…,8 npx vitest run`) | 9 attacker / 7 defender wins; 63 kills; 8 drones shot down; one timeout |
 | Headless autopilot attack, 16 rounds | 0 timeouts (4 of 12 before the fix) |
 | Browser, Chromium at 852×393 landscape with real CDP touch events | Menu tabs → Standard → loading → operator select → spawn select → drone driving and tagging → skip prep → aim stick, FIRE, ADS, scoreboard → autopilot to round end. Also range (select, aim, fire, pause, leave) and a full defence situation through to match end. No page or console errors. |

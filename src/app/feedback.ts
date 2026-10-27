@@ -138,6 +138,7 @@ export class Feedback {
           if (a.team === 0 || w.visible[0].has(a.id)) this.playAt(w, 'hit_flesh', a.pos, 10, false, a.id === human?.id ? 1 : 0.7);
           if (e.sourceId === human?.id && a.team !== 0 && e.hpAfter > 0) this.sfx.play('hitmarker', { volume: 0.8 });
           if (a.id === human?.id) {
+            this.hud.hurt(e.amount);
             const src = w.actor(e.sourceId);
             // direction only toward a source the team can see, else a vague flash from behind
             if (src && w.visible[0].has(src.id)) this.hud.damageFrom(angleTo(a.pos, src.pos));
@@ -159,6 +160,7 @@ export class Feedback {
           if (k && k.id === human?.id && a && a.team !== 0) {
             this.stats.humanKills++;
             this.sfx.play('kill_confirm');
+            this.hud.killPop(a.name, 100);
           }
           if (a && a.id === human?.id) this.onHumanDeath(e.killerId);
           break;

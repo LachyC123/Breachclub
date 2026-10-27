@@ -57,6 +57,11 @@ A match runs:
 
 A laser sight runs from your muzzle to the first thing that blocks it, and turns red when it lies on a visible enemy. Hits show a white marker; kills show a red one.
 
+**Operators** have ARMOUR / SPEED ratings: light operators move 12% faster, and heavy ones take 20% less gunfire damage. Guns handle differently:
+- **Carbine:** marksman.
+- **Pocket SMG:** run-and-gun.
+- **Scattergun:** pump action, knockback, shell-by-shell reload that firing interrupts.
+
 **Ram (attack): bumper sled**
 - Hold GADGET and drag to aim. A dotted route shows where the sled goes: an amber ring marks the panel it will break, a red X marks a hard stop.
 - Release to launch.

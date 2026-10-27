@@ -26,10 +26,13 @@ export interface Look {
   pack?: 'wheel' | 'door' | 'bag' | 'none';
   pad?: string;
   scarf?: string;
+  /** body armour matching the operator's rating: light chest rig, medium vest, heavy plate carrier */
+  vest?: 'light' | 'medium' | 'heavy';
 }
 
 export const LOOKS: Record<string, Look> = {
   ram: {
+    vest: 'medium',
     skin: P.skin2,
     skinShade: P.skin3,
     hair: P.brownDark,
@@ -45,6 +48,7 @@ export const LOOKS: Record<string, Look> = {
     pack: 'wheel',
   },
   hinge: {
+    vest: 'heavy',
     skin: P.skin3,
     skinShade: P.skin4,
     hair: P.ink,
@@ -61,6 +65,7 @@ export const LOOKS: Record<string, Look> = {
     pad: P.amber,
   },
   mo: {
+    vest: 'light',
     skin: P.skin2,
     skinShade: P.skin3,
     hair: P.ink,
@@ -76,6 +81,7 @@ export const LOOKS: Record<string, Look> = {
     pack: 'bag',
   },
   tess: {
+    vest: 'heavy',
     skin: P.skin4,
     skinShade: '#55341f',
     hair: P.ink,
@@ -92,6 +98,7 @@ export const LOOKS: Record<string, Look> = {
     pack: 'none',
   },
   dex: {
+    vest: 'light',
     skin: P.skin1,
     skinShade: P.skin2,
     hair: P.coralDark,
@@ -107,6 +114,7 @@ export const LOOKS: Record<string, Look> = {
     pack: 'none',
   },
   june: {
+    vest: 'medium',
     skin: P.skin2,
     skinShade: P.skin3,
     hair: P.amberLight,
@@ -253,6 +261,25 @@ function drawBody(look: Look, view: View, frame: number): Pix {
     p.px(tx - 1, ty + 7, look.skinShade).px(tx + tw, ty + 7, look.skinShade);
   }
   if (look.pad) p.rect(side ? tx + 1 : tx + tw - 2, ty - 1, 4, 3, look.pad);
+  // armour reads at a glance: heavies are visibly bulkier
+  if (look.vest === 'heavy') {
+    const vx = side ? tx + 1 : tx + 1;
+    p.rect(vx, ty + 1, tw - 2, Math.min(th - 2, 8), P.slate);
+    p.hl(vx, vx + tw - 3, ty + 1, P.slate3);
+    p.vl(vx + tw - 3, ty + 1, ty + Math.min(th - 2, 8), P.navy2);
+    if (!back) p.rect(vx + 1, ty + 4, tw - 4, 2, P.slate2);
+    // shoulder plates widen the silhouette
+    if (!side) p.rect(tx - 2, ty, 3, 3, P.slate2).rect(tx + tw - 1, ty, 3, 3, P.slate2);
+    else p.rect(tx + 1, ty - 1, 4, 3, P.slate2);
+  } else if (look.vest === 'medium') {
+    p.rect(tx + 1, ty + 2, tw - 2, 5, P.navy2);
+    p.hl(tx + 1, tx + tw - 2, ty + 2, P.slate);
+    if (!back) p.px(tx + 2, ty + 4, P.slate3).px(tx + tw - 3, ty + 4, P.slate3);
+  } else if (look.vest === 'light') {
+    // just a chest-rig strap: fast and exposed
+    if (!side) for (let i = 0; i < 6; i++) p.px(tx + 1 + i, ty + 1 + i, P.ink);
+    else p.vl(tx + 3, ty + 1, ty + 6, P.ink);
+  }
 
   // ---- head ----
   const hx = side ? 9 : 8;

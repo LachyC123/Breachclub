@@ -25,6 +25,8 @@ import type { Actor, SimEvent, Vec, HingeEntity, Obb } from '../sim/types';
 import { raycast, type GeoState, obbCorners } from '../sim/geometry';
 import { canSee, DRONE_VISION } from '../sim/perception';
 import { RULES } from '../content/defs';
+import { statsOf } from '../content/handling';
+import { Fx, buildLightTexture } from './fx';
 
 const VISION = RULES.vision_tiles;
 
@@ -65,6 +67,8 @@ interface ActorView {
   ghostRing: Phaser.GameObjects.Image;
   flashUntil: number;
   deadShown: boolean;
+  /** view-only knockback when the body drops (pixels, eased in over 0.25 s) */
+  fall: { x: number; y: number; t: number } | null;
   look: string;
   weapon: string;
 }
@@ -82,8 +86,19 @@ interface Tracer {
   a: Vec;
   b: Vec;
   t: number;
+  max: number;
   col: number;
+  /** head width in pixels and head length */
+  w: number;
+  head: number;
 }
+
+/** Per-weapon presentation: each gun has its own flash, tracer, smoke, brass and kick. */
+const GUN_FX: Record<string, { flash: number; light: number; tracerT: number; tracerW: number; head: number; smoke: number; shell: boolean; kick: number; shake: number }> = {
+  smg: { flash: 1, light: 0.8, tracerT: 0.06, tracerW: 1, head: 7, smoke: 0, shell: false, kick: 0.9, shake: 0 },
+  carbine: { flash: 1.4, light: 1.15, tracerT: 0.1, tracerW: 2, head: 14, smoke: 1, shell: false, kick: 2.2, shake: 0.3 },
+  scattergun: { flash: 2.2, light: 1.9, tracerT: 0.07, tracerW: 1, head: 5, smoke: 4, shell: true, kick: 5, shake: 1.2 },
+};
 
 interface SoundArc {
   ang: number;
@@ -124,6 +139,7 @@ export function generateTextures(scene: Phaser.Scene) {
   addCanvas(scene, 'charge0', buildCharge(false));
   addCanvas(scene, 'charge1', buildCharge(true));
   for (let f = 0; f < 3; f++) addCanvas(scene, `muzzle${f}`, buildMuzzle(f));
+  addCanvas(scene, 'fxlight', buildLightTexture());
   for (let f = 0; f < 4; f++) addCanvas(scene, `dust${f}`, buildDust(f));
   for (const k of ['player', 'ally', 'enemy', 'ghost'] as const) addCanvas(scene, `ring_${k}`, buildRing(k));
   for (const s of ['idle', 'arming', 'armed'] as const) for (const b of [0, 1]) addCanvas(scene, `console_${s}_${b}`, consoleSprite(s, b).c);
@@ -165,12 +181,16 @@ export class WorldView {
   private hits: HitMark[] = [];
   private humanId = -1;
   private zoom = 3;
+  private juice: Fx;
+  private kick = { x: 0, y: 0 };
+  private shotThisTick = new Set<number>();
   /** wider view while aiming down sights */
   private adsZoom = 2;
   private curZoom = 3;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.juice = new Fx(scene);
   }
 
   /** Build the presentation for a fresh round (clean restart: everything is recreated). */
@@ -212,6 +232,7 @@ export class WorldView {
     for (let i = 0; i < 140; i++) this.rain.push({ x: Math.random() * m.w * T, y: Math.random() * m.h * T, s: 0.6 + Math.random() * 0.6 });
     this.camPos = null;
     this.polyCache = [];
+    this.juice.attach(m);
   }
 
   destroyAll() {
@@ -242,6 +263,7 @@ export class WorldView {
     this.blockedCells = null;
     this.corpseVisible.clear();
     this.hits = [];
+    this.juice.destroy();
   }
 
   /** count of live display objects (restart regression check) */
@@ -253,6 +275,7 @@ export class WorldView {
 
   onEvents(events: SimEvent[]) {
     const w = this.world;
+    this.shotThisTick.clear();
     const vis = (id: number) => {
       const a = w.actor(id);
       return !!a && (a.team === 0 || w.visible[0].has(id));
@@ -262,23 +285,39 @@ export class WorldView {
         case 'shot': {
           if (!vis(e.actorId)) break;
           const a = w.actor(e.actorId)!;
-          this.tracers.push({ a: e.from, b: e.to, t: 0.08, col: a.team === 0 ? hex(P.amberLight) : hex(P.coralLight) });
-          if (this.flashes.length < 12) {
-            const len = weaponLength(a.weapon.id) / T;
-            const mx = (a.pos.x + Math.cos(a.facing) * (0.2 + len)) * T;
-            const my = (a.pos.y + Math.sin(a.facing) * (0.15 + len)) * T - 4;
-            const img = this.scene.add.image(mx, my, `muzzle${Math.floor(Math.random() * 2)}`).setDepth(DEPTH_FX + 2);
+          const gx = GUN_FX[a.weapon.id] ?? GUN_FX.smg;
+          this.tracers.push({ a: e.from, b: e.to, t: gx.tracerT, max: gx.tracerT, col: a.team === 0 ? hex(P.amberLight) : hex(P.coralLight), w: gx.tracerW, head: gx.head });
+          // once per trigger pull (a scattergun blast is five pellet events)
+          if (this.shotThisTick.has(a.id)) break;
+          this.shotThisTick.add(a.id);
+          const len = weaponLength(a.weapon.id) / T;
+          const muzzle = { x: a.pos.x + Math.cos(a.facing) * (0.2 + len), y: a.pos.y + Math.sin(a.facing) * (0.15 + len) };
+          if (this.flashes.length < 12 && !this.reducedFlash) {
+            const img = this.scene.add.image(muzzle.x * T, muzzle.y * T - 4, `muzzle${Math.floor(Math.random() * 2)}`).setDepth(DEPTH_FX + 2).setScale(gx.flash).setRotation(a.facing);
             img.setBlendMode(Phaser.BlendModes.ADD);
-            this.flashes.push({ img, t: 0.05 });
+            this.flashes.push({ img, t: 0.03 + gx.flash * 0.015 });
+            this.juice.muzzleLight(muzzle, gx.light);
           }
-          const av = this.actors.get(e.actorId);
-          if (av) av.body.y += 0; // recoil handled in render via lastShot
+          if (gx.smoke) this.juice.smoke(muzzle, gx.smoke, gx.smoke > 2 ? 2.2 : 1, a.facing, P.cream);
+          if (!gx.shell) this.juice.casing(a.pos, a.facing, false);
+          else this.pendingShells.push({ id: a.id, at: this.time + 0.32 });
+          if (a.id === this.humanId) {
+            // recoil kick pushes the camera back along the barrel; heavy guns also shake
+            this.kick.x -= Math.cos(a.facing) * gx.kick;
+            this.kick.y -= Math.sin(a.facing) * gx.kick;
+            if (gx.shake) this.addShake(gx.shake, 0.08);
+          }
           break;
         }
         case 'surfaceHit': {
           if (!this.pointVisible(e.pos)) break;
           const col = e.material === 'soft' ? (e.reinforced ? P.metalLight : P.cream) : e.material === 'barricade' ? P.tan : e.material === 'gadget' ? P.amberLight : e.material === 'prop' ? P.tealLight : P.slate3;
           this.burst(e.pos, 4, col, 30, 0.25);
+          const metal = e.material === 'gadget' || e.reinforced;
+          // hard surfaces spark, soft ones puff plaster or wood dust
+          if (metal || e.material === 'wall') this.juice.sparks(e.pos, metal ? 6 : 3, metal ? P.yellow : P.amberLight, metal ? 120 : 80);
+          else this.juice.smoke(e.pos, 1, 0.8, null, e.material === 'barricade' ? P.tan : P.cream);
+          if (e.material !== 'gadget') this.juice.bulletHole(e.pos, e.material);
           break;
         }
         case 'damage': {
@@ -291,7 +330,11 @@ export class WorldView {
           if (v && vis(e.actorId)) {
             v.flashUntil = this.time + 0.08;
             const a = w.actor(e.actorId)!;
+            const src = w.actor(e.sourceId);
+            const dir = src ? Math.atan2(a.pos.y - src.pos.y, a.pos.x - src.pos.x) : Math.random() * Math.PI * 2;
             this.burst(a.pos, 3, P.white, 25, 0.18);
+            this.burst(a.pos, 3 + Math.round(e.amount / 8), P.coralDeep, 55, 0.3, 90);
+            this.juice.blood(a.pos, dir, 2 + Math.round(e.amount / 6));
           }
           break;
         }
@@ -305,7 +348,11 @@ export class WorldView {
               this.burst(cp, 6, P.tan, 80, 0.7, 160, true);
               this.burst(cp, 6, P.white, 60, 0.25);
               this.dust(cp);
+              this.juice.smoke(cp, 4, 3, null, P.cream);
             }
+            this.juice.shockwave(g.center, 3.5);
+            if (e.cause === 'charge') this.juice.scorch(g.center, 1.6);
+            this.juice.sparks(g.center, 14, P.amberLight, 160);
             if (!this.reducedFlash) this.flashAt(g.center);
           }
           this.addShake(seen ? 2 : 1, 0.25);
@@ -316,6 +363,7 @@ export class WorldView {
           if (this.pointVisible(d.center) || w.actor(e.by)?.team === 0) {
             for (const c of d.cells) this.burst({ x: (c % w.map.w) + 0.5, y: Math.floor(c / w.map.w) + 0.5 }, 10, P.tan, 70, 0.6, 100);
             this.dust(d.center);
+            this.juice.smoke(d.center, 5, 2, null, P.tan);
           }
           break;
         }
@@ -332,9 +380,11 @@ export class WorldView {
         case 'sledDestroyed':
         case 'coverDestroyed':
         case 'hingeDestroyed': {
-          if (this.pointVisible(e.pos)) {
+          if (this.pointVisible(e.pos) || (e.type === 'droneDestroyed' && w.actor(e.ownerId)?.team === 0)) {
             this.burst(e.pos, 12, e.type === 'hingeDestroyed' ? P.violetLight : P.metal, 70, 0.5, 80);
             this.dust(e.pos);
+            this.juice.sparks(e.pos, 10, P.yellow, 110);
+            this.juice.smoke(e.pos, 3, 1.5, null, P.slate3);
           }
           break;
         }
@@ -351,7 +401,16 @@ export class WorldView {
         }
         case 'death': {
           const a = w.actor(e.actorId);
-          if (a && vis(a.id)) this.burst(a.pos, 8, P.cream2, 40, 0.4);
+          const k = w.actor(e.killerId);
+          if (a && vis(a.id)) {
+            this.burst(a.pos, 8, P.cream2, 40, 0.4);
+            this.juice.pool(a.pos);
+            // the body is thrown away from whoever got them
+            const v = this.actors.get(a.id);
+            const dir = k ? Math.atan2(a.pos.y - k.pos.y, a.pos.x - k.pos.x) : 0;
+            const shove = k && k.weapon.id === 'scattergun' ? 9 : 5;
+            if (v) v.fall = { x: Math.cos(dir) * shove, y: Math.sin(dir) * shove * 0.7, t: 0 };
+          }
           if (a && a.team === 0) this.addShake(1.5, 0.2);
           break;
         }
@@ -367,6 +426,18 @@ export class WorldView {
   pushSoundArc(ang: number, spread: number, kind: string) {
     this.arcs.push({ ang, spread, kind, t: 1.4 });
     if (this.arcs.length > 8) this.arcs.shift();
+  }
+
+  /** pump action: the spent shell flies out a beat after the blast */
+  private pendingShells: Array<{ id: number; at: number }> = [];
+  private ejectShells() {
+    const due = this.pendingShells.filter((p) => this.time >= p.at);
+    if (!due.length) return;
+    this.pendingShells = this.pendingShells.filter((p) => this.time < p.at);
+    for (const p of due) {
+      const a = this.world.actor(p.id);
+      if (a && a.alive && (a.team === 0 || this.world.visible[0].has(a.id))) this.juice.casing(a.pos, a.facing, true);
+    }
   }
 
   private addShake(mag: number, t: number) {
@@ -512,6 +583,8 @@ export class WorldView {
       }
 
     this.updateFx(dt);
+    this.ejectShells();
+    this.juice.update(dt);
     if (this.frame % 2 === 0 || this.polyCache.length === 0) this.drawFog(o.droneId);
     this.drawOverlay(humanId, o.preview, o.laser, o.ads);
     this.drawRain(dt);
@@ -531,6 +604,7 @@ export class WorldView {
         ghostRing: s.add.image(0, 0, 'ring_ghost').setDepth(DEPTH_OVER - 3),
         flashUntil: 0,
         deadShown: false,
+        fall: null,
         look: a.look,
         weapon: a.weapon.id,
       };
@@ -563,7 +637,15 @@ export class WorldView {
       if (a.team !== 0 && this.frame % 10 === 0) this.corpseVisible.set(a.id, this.pointVisible(a.pos));
       const show = a.team === 0 || !!this.corpseVisible.get(a.id);
       const since = (w.tick - a.diedTick) / 60;
-      v.body.setVisible(show).setPosition(px, py).setDepth(99 + py - 8).setAlpha(since > 2 ? 0.5 : 0.9);
+      let fx = 0;
+      let fy = 0;
+      if (v.fall) {
+        v.fall.t = Math.min(1, v.fall.t + 1 / 15);
+        const e = 1 - (1 - v.fall.t) * (1 - v.fall.t);
+        fx = Math.round(v.fall.x * e);
+        fy = Math.round(v.fall.y * e);
+      }
+      v.body.setVisible(show).setPosition(px + fx, py + fy).setDepth(99 + py - 8).setAlpha(since > 2 ? 0.5 : 0.9);
       return;
     }
     v.body.setVisible(visible);
@@ -574,10 +656,11 @@ export class WorldView {
     const speed = Math.hypot(a.vel.x, a.vel.y);
     let col: number;
     if (a.vaulting) col = 3;
-    else if (speed > 0.3) col = 2 + (Math.floor(this.time * 9 + a.id) % 4);
+    // stride cadence follows the operator's speed rating (light ops scurry, heavies plod)
+    else if (speed > 0.3) col = 2 + (Math.floor(this.time * (6 + statsOf(a.operatorId).speed * 2) + a.id) % 4);
     else col = Math.floor(this.time * 1.6 + a.id * 0.37) % 2;
     // recoil kick: body nudged opposite the facing for a frame after a shot
-    const kick = w.tick < a.nextShotTick - Math.max(1, Math.round(a.weapon.interval_seconds * 60)) + 3 ? 1 : 0;
+    const kick = w.tick < a.nextShotTick - Math.max(1, Math.round(a.weapon.interval_seconds * 60)) + (a.weapon.id === 'scattergun' ? 6 : 3) ? (a.weapon.id === 'scattergun' ? 2 : 1) : 0;
     const kx = -Math.cos(a.facing) * kick;
     const ky = -Math.sin(a.facing) * kick;
     const vaultLift = a.vaulting ? -4 * Math.sin(Math.min(1, (w.tick - a.vaulting.startTick) / (a.vaulting.endTick - a.vaulting.startTick)) * Math.PI) : 0;
@@ -601,11 +684,12 @@ export class WorldView {
       // short bright head near the target over a faint trail: reads as hitscan, not a slow bullet
       const hx = t.b.x * T;
       const hy = t.b.y * T - 4;
-      g.lineStyle(1, t.col, 0.45 * Math.min(1, t.t / 0.05));
+      const fade = t.t / t.max;
+      g.lineStyle(1, t.col, 0.45 * fade);
       g.lineBetween(t.a.x * T, t.a.y * T - 4, hx, hy);
       const len = Math.hypot(hx - t.a.x * T, hy - (t.a.y * T - 4)) || 1;
-      const k = Math.min(1, 10 / len);
-      g.lineStyle(2, hex(P.white), Math.min(1, t.t / 0.04));
+      const k = Math.min(1, t.head / len);
+      g.lineStyle(t.w + 1, hex(P.white), Math.min(1, fade * 1.6));
       g.lineBetween(hx - (hx - t.a.x * T) * k, hy - (hy - (t.a.y * T - 4)) * k, hx, hy);
       t.t -= dt;
     }
@@ -907,7 +991,10 @@ export class WorldView {
       sy = (Math.random() - 0.5) * 2 * this.shake.mag;
       if (this.shake.t <= 0) this.shake.mag = 0;
     }
-    cam.centerOn(Math.round(this.camPos.x + sx), Math.round(this.camPos.y + sy));
+    const kd = Math.pow(0.0005, dt);
+    this.kick.x *= kd;
+    this.kick.y *= kd;
+    cam.centerOn(Math.round(this.camPos.x + sx + this.kick.x), Math.round(this.camPos.y + sy + this.kick.y));
   }
 
   worldToScreen(p: Vec): Vec {

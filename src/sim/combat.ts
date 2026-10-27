@@ -5,10 +5,9 @@ import type { Actor, ActorIntent, Vec } from './types';
 import type { World } from './world';
 import { breachSoftGroup, destroyBarricade, damageEntity } from './gadgets';
 import { ACTOR_RADIUS } from './movement';
+import { ARMOUR_DAMAGE, WEAPON_HANDLING, statsOf } from '../content/handling';
 
 const HIT_RADIUS = 0.4;
-const BASE_SPREAD: Record<string, number> = { smg: 0.045, carbine: 0.025, scattergun: 0.02 };
-const BLOOM_PER_SHOT: Record<string, number> = { smg: 0.018, carbine: 0.022, scattergun: 0.05 };
 const SOFT_GUNFIRE_FACTOR = 0.15;
 const BARRICADE_GUNFIRE_FACTOR = 0.5;
 
@@ -17,7 +16,8 @@ export function canShoot(w: World, a: Actor): boolean {
     a.alive &&
     !a.vaulting &&
     !a.interaction &&
-    a.reloadUntil < 0 &&
+    // a shell-by-shell reload can be interrupted by firing whatever is already loaded
+    (a.reloadUntil < 0 || (WEAPON_HANDLING[a.weapon.id].reload === 'shell' && a.mag > 0)) &&
     a.gadgetWindupUntil < w.tick &&
     a.lowerWeaponUntil < w.tick
   );
@@ -25,7 +25,8 @@ export function canShoot(w: World, a: Actor): boolean {
 
 export function startReload(w: World, a: Actor): boolean {
   if (a.reloadUntil >= 0 || a.reserve <= 0 || a.mag >= a.weapon.magazine || a.interaction) return false;
-  a.reloadUntil = w.tick + secs(a.weapon.reload_seconds);
+  const hd = WEAPON_HANDLING[a.weapon.id];
+  a.reloadUntil = w.tick + secs(hd.reload === 'shell' ? hd.shellSeconds : a.weapon.reload_seconds);
   w.emit({ type: 'reloadStart', actorId: a.id });
   w.emitSound(a.pos, 'reload', 3, a.team, a.id);
   return true;
@@ -39,7 +40,18 @@ export function stepReloads(w: World, get: (a: Actor) => ActorIntent) {
     }
     const it = get(a);
     if (it.reload) startReload(w, a);
-    if (a.reloadUntil >= 0 && w.tick >= a.reloadUntil) {
+    if (a.reloadUntil >= 0 && w.tick >= a.reloadUntil && WEAPON_HANDLING[a.weapon.id].reload === 'shell') {
+      // one shell in; keep going until full or out of reserve
+      a.mag++;
+      a.reserve--;
+      if (a.mag < a.weapon.magazine && a.reserve > 0) {
+        a.reloadUntil = w.tick + secs(WEAPON_HANDLING[a.weapon.id].shellSeconds);
+        w.emitSound(a.pos, 'reload', 2, a.team, a.id);
+      } else {
+        a.reloadUntil = -1;
+        w.emit({ type: 'reloadEnd', actorId: a.id });
+      }
+    } else if (a.reloadUntil >= 0 && w.tick >= a.reloadUntil) {
       const take = Math.min(a.weapon.magazine - a.mag, a.reserve);
       a.mag += take;
       a.reserve -= take;
@@ -76,12 +88,18 @@ export function stepCombat(w: World, get: (a: Actor) => ActorIntent) {
 
 function fire(w: World, a: Actor) {
   const wpn = a.weapon;
+  const hd = WEAPON_HANDLING[wpn.id];
+  if (a.reloadUntil >= 0) {
+    // firing interrupts a shell reload
+    a.reloadUntil = -1;
+    w.emit({ type: 'reloadEnd', actorId: a.id });
+  }
   a.mag--;
   a.nextShotTick = w.tick + Math.max(1, secs(wpn.interval_seconds));
-  const moving = Math.hypot(a.vel.x, a.vel.y) > 0.5 ? 0.025 : 0;
+  const moving = Math.hypot(a.vel.x, a.vel.y) > 0.5 ? hd.movingSpread : 0;
   const adsK = a.ads ? 0.4 : 1;
-  const spread = ((BASE_SPREAD[wpn.id] ?? 0.03) + a.bloom + moving) * adsK;
-  a.bloom = Math.min(0.12, a.bloom + (BLOOM_PER_SHOT[wpn.id] ?? 0.02) * (a.ads ? 0.6 : 1));
+  const spread = (hd.baseSpread + a.bloom + moving) * adsK;
+  a.bloom = Math.min(0.12, a.bloom + hd.bloomPerShot * (a.ads ? 0.6 : 1));
   const maxRange = wpn.effective_range_tiles * 2;
   const start = muzzle(a);
   // if the muzzle pokes through a wall, the shot originates (and stops) at the wall face
@@ -137,8 +155,15 @@ function traceBullet(w: World, a: Actor, from: Vec, to: Vec, baseDamage: number)
   const endPoint = { x: from.x + dx * bestT, y: from.y + dy * bestT };
   if (best) {
     const d = dist(from, best.pos);
-    const dmg = Math.round(baseDamage * falloff(a, d));
+    // armour soaks part of every bullet; heavy guns knock the target back
+    const dmg = Math.round(baseDamage * falloff(a, d) * ARMOUR_DAMAGE[statsOf(best.operatorId).armour]);
     w.damageActor(best, dmg, a.id);
+    const push = WEAPON_HANDLING[a.weapon.id].shove * falloff(a, d);
+    if (push > 0 && w.phase !== 'prep') {
+      const len = Math.hypot(dx, dy) || 1;
+      // shove decays by half each tick, so this totals `push` tiles
+      best.shove = { x: best.shove.x + (dx / len) * push * 0.5, y: best.shove.y + (dy / len) * push * 0.5 };
+    }
     w.emit({ type: 'shot', actorId: a.id, from, to: endPoint, hitActor: best.id, hitSurface: 'none', weapon: a.weapon.id });
     return;
   }

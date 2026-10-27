@@ -109,6 +109,8 @@ export class Hud {
   private droneLabel: HTMLElement;
   private droneSub: HTMLElement;
   private elimEl: HTMLElement;
+  private hurtEl: HTMLElement;
+  private popEl: HTMLElement;
   private interactRing: ReturnType<typeof ring>;
   private gadgetRing: ReturnType<typeof ring>;
   private tagRing: ReturnType<typeof ring>;
@@ -177,8 +179,10 @@ export class Hud {
     this.droneSub = h('div', { class: 'dc-sub' });
     this.droneCam = h('div', { class: 'dronecam' }, h('div', { class: 'dc-scan' }), h('div', { class: 'dc-corners' }), h('div', { class: 'dc-head' }, h('span', { class: 'rec' }), this.droneLabel, this.droneSub), h('div', { class: 'dc-reticle' }));
     this.elimEl = h('div', { class: 'elim' });
+    this.hurtEl = h('div', { class: 'hurt-flash' });
+    this.popEl = h('div', { class: 'kill-pops' });
 
-    this.root.append(this.touch, this.droneCam, this.vignette, this.dmg, this.moveStick, this.aimStick, top, sys, this.feed, this.vitals, this.cluster, this.toastEl, this.cancelZone, this.hintEl, this.elimEl);
+    this.root.append(this.touch, this.droneCam, this.hurtEl, this.popEl, this.vignette, this.dmg, this.moveStick, this.aimStick, top, sys, this.feed, this.vitals, this.cluster, this.toastEl, this.cancelZone, this.hintEl, this.elimEl);
     parent.appendChild(this.root);
     this.setMode('play');
   }
@@ -221,6 +225,25 @@ export class Hud {
     void i.offsetWidth;
     i.style.transition = 'opacity 800ms';
     i.style.opacity = '0';
+  }
+
+  /** red edge flash scaled by how hard you were hit */
+  hurt(amount: number) {
+    const el = this.hurtEl;
+    el.style.transition = 'none';
+    el.style.opacity = String(Math.min(0.9, 0.25 + amount / 40));
+    void el.offsetWidth;
+    el.style.transition = 'opacity 450ms';
+    el.style.opacity = '0';
+  }
+
+  /** "ELIMINATED NAME +100" stack beside the crosshair area */
+  killPop(name: string, points: number, headline = 'ELIMINATED') {
+    const el = h('div', { class: 'kpop' }, h('b', {}, headline), ` ${name} `, h('em', {}, `+${points}`));
+    this.popEl.appendChild(el);
+    while (this.popEl.children.length > 3) this.popEl.firstElementChild?.remove();
+    setTimeout(() => el.classList.add('out'), 1500);
+    setTimeout(() => el.remove(), 1900);
   }
 
   banner(text: string, sub = '', ms = 1600, cls = '') {

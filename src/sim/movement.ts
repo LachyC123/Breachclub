@@ -4,6 +4,7 @@ import { DT, RULES, secs } from '../content/defs';
 import { cellBlocks, closestOnObb, type GeoState } from './geometry';
 import type { Actor, ActorIntent, Vec } from './types';
 import type { World } from './world';
+import { SPEED_MULT, WEAPON_HANDLING, statsOf } from '../content/handling';
 
 export const ACTOR_RADIUS = 0.32;
 
@@ -156,7 +157,10 @@ export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
       mx = 0;
       my = 0;
     }
-    let speed = speedBase * (a.ads ? 0.55 : 1);
+    const hd = WEAPON_HANDLING[a.weapon.id];
+    // operator speed rating, slower while aiming, and a brief stagger after each shot
+    let speed = speedBase * SPEED_MULT[statsOf(a.operatorId).speed] * (a.ads ? hd.adsMove : 1);
+    if (w.tick < a.nextShotTick && a.mag < a.weapon.magazine) speed *= hd.fireMove;
     if (a.flinchUntil >= w.tick) speed *= 0.7;
     const dx = mx * speed * DT + a.shove.x;
     const dy = my * speed * DT + a.shove.y;
@@ -178,7 +182,7 @@ export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
   }
   separateActors(w);
   // bloom decay
-  for (const a of w.actors) a.bloom = Math.max(0, a.bloom - DT * 0.35);
+  for (const a of w.actors) a.bloom = Math.max(0, a.bloom - DT * WEAPON_HANDLING[a.weapon.id].bloomRecovery);
   void secs;
 }
 

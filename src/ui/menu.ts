@@ -4,6 +4,7 @@ import { OPERATORS, operatorById, displayName, SQUADMATES } from '../content/def
 import type { Settings } from '../app/settings';
 import type { Difficulty } from '../sim/world';
 import { settingsPanel } from './settingsPanel';
+import { statsOf } from '../content/handling';
 
 export type Playlist = 'quick' | 'standard' | 'range' | 'sit_attack' | 'sit_defence';
 export type HomeTab = 'play' | 'operators' | 'training' | 'settings';
@@ -37,6 +38,20 @@ export const OP_INFO: Record<string, { role: string; gadget: string; ability: st
   recruit_dex: { role: 'ROAMER', gadget: 'REINFORCEMENTS', ability: 'Shares the team’s reinforcements and barricades.', how: 'Hold INTERACT at a dashed wall or doorway during preparation.', counters: 'Breach the walls he did not reinforce.', weapons: ['smg', 'carbine', 'scattergun'] },
   recruit_june: { role: 'SUPPORT', gadget: 'REINFORCEMENTS', ability: 'Close-quarters defender who shares the team’s reinforcements.', how: 'Hold INTERACT at a dashed wall or doorway during preparation.', counters: 'Clear her corners from range.', weapons: ['scattergun', 'smg', 'carbine'] },
 };
+
+/** ARMOUR / SPEED pip bars (Siege-style ratings). */
+export function ratingBars(op: string): HTMLElement {
+  const st = statsOf(op);
+  const bar = (label: string, n: number) => h('div', { class: 'rating' }, h('span', {}, label), h('div', { class: 'pips3' }, ...[1, 2, 3].map((i) => h('i', { class: i <= n ? 'on' : '' }))));
+  return h('div', { class: 'ratings' }, bar('ARMOUR', st.armour), bar('SPEED', st.speed));
+}
+
+/** Weapon stat bars: damage, fire rate, range, mobility (0..1, relative across the three guns). */
+export function weaponBars(id: 'carbine' | 'smg' | 'scattergun'): HTMLElement {
+  const v: Record<string, [number, number, number, number]> = { carbine: [0.75, 0.55, 0.9, 0.45], smg: [0.5, 0.95, 0.55, 0.85], scattergun: [1, 0.2, 0.25, 0.6] };
+  const names = ['DAMAGE', 'FIRE RATE', 'RANGE', 'MOBILITY'];
+  return h('div', { class: 'wbars' }, ...v[id].map((x, i) => h('div', { class: 'wbar' }, h('span', {}, names[i]), h('div', {}, h('i', { style: `width:${Math.round(x * 100)}%` })))));
+}
 
 export function lookOf(op: string): string {
   return SQUADMATES.find((s) => s.id === op)?.look ?? op;
@@ -187,6 +202,7 @@ export function operatorsBrowser(): HTMLElement {
         h('div', { class: `od-side ${side}` }, side === 'attack' ? 'ATTACKER' : 'DEFENDER', ' · ', info.role),
         h('div', { class: 'od-name' }, displayName(op)),
         h('div', { class: 'od-gadget' }, info.gadget),
+        ratingBars(op),
         h('p', {}, info.ability),
         h('p', { class: 'dim' }, h('b', {}, 'HOW: '), info.how),
         h('p', { class: 'dim' }, h('b', {}, 'COUNTER: '), info.counters),

@@ -89,8 +89,8 @@ export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff: Di
   // fall back: losing the trade, or empty with a threat in front of us (point blank, turning away
   // only gets you shot in the back: fight it out)
   const losing = a.hp < 45 && (target.hp > a.hp || p.visible.length > 1) && d < 9 && d > 3.5;
-  // a defender facing two or more at once breaks line of sight and re-peeks one at a time
-  const outnumbered = a.side === 'defence' && p.visible.length >= 2 && d > 3.5 && w.phase !== 'armed';
+  // facing two or more at once: break line of sight and re-peek them one at a time
+  const outnumbered = p.visible.length >= 2 && d > 3.5 && w.phase !== 'armed';
   // at most two retreats per stretch of fighting: then commit (time and the objective matter)
   if (w.tick - b.fallbackWindow > secs(10)) {
     b.fallbackWindow = w.tick;

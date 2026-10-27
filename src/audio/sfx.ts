@@ -422,6 +422,11 @@ const SYN: Record<SfxName, (s: Syn) => void> = {
     s.tone({ type: 'triangle', f: 260, f1: 80, d: 0.08, peak: 0.3 });
     s.noise({ filt: 'bandpass', ff: 2600, q: 1.2, at: 0.008, d: 0.07, peak: 0.35 });
     s.noise({ kind: 'pink', filt: 'lowpass', ff: 900, at: 0.05, a: 0.03, d: 0.4, peak: 0.13 });
+    // pump: slide back, slide forward
+    s.noise({ filt: 'bandpass', ff: 1900, q: 2.5, at: 0.3, d: 0.03, peak: 0.32 });
+    s.tone({ type: 'square', f: 220, f1: 160, at: 0.3, d: 0.03, peak: 0.07, filt: 'lowpass', ff: 1500 });
+    s.noise({ filt: 'bandpass', ff: 2400, q: 2.5, at: 0.4, d: 0.03, peak: 0.36 });
+    s.tone({ type: 'square', f: 260, f1: 190, at: 0.4, d: 0.025, peak: 0.07, filt: 'lowpass', ff: 1500 });
   },
   dry_fire: (s) => {
     s.noise({ filt: 'bandpass', ff: 4200, q: 3, d: 0.012, peak: 0.45 });

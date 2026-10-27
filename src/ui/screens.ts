@@ -2,13 +2,13 @@
 // round summary and match end. Pure DOM; callers own timing and state.
 import { h, portrait, figureCanvas } from './dom';
 import { displayName } from '../content/defs';
-import { OP_INFO, lookOf } from './menu';
+import { OP_INFO, lookOf, ratingBars, weaponBars } from './menu';
 import type { World } from '../sim/world';
 import type { Actor, Vec } from '../sim/types';
 import type { MapData } from '../sim/mapdata';
 
 const WEAPON_LABEL: Record<string, string> = { carbine: 'CARBINE', smg: 'POCKET SMG', scattergun: 'SCATTERGUN' };
-const WEAPON_NOTE: Record<string, string> = { carbine: 'Accurate · 25 dmg · 18 rds', smg: 'Fast fire · 18 dmg · 24 rds', scattergun: 'Close range · 5 pellets · 6 rds' };
+const WEAPON_NOTE: Record<string, string> = { carbine: 'Marksman · pin-point first shots', smg: 'Run-and-gun · forgiving on the move', scattergun: 'Pump · knockback · shell reload' };
 
 export function loadingScreen(info: { mode: string; mapName: string; sub: string; objective: string; difficulty: string; squads: [string[], string[]] }): HTMLElement {
   const squad = (ops: string[], cls: string) => h('div', { class: `ld-squad ${cls}` }, ...ops.map((o) => h('div', { class: 'ld-op' }, h('img', { class: 'pix', src: portrait(lookOf(o)), alt: '' }), h('span', {}, displayName(o)))));
@@ -71,9 +71,11 @@ export function opSelectScreen(cfg: { round: number; side: 'attack' | 'defence';
         h('div', { class: 'os-role' }, info.role),
         h('div', { class: 'os-name' }, displayName(sel.op)),
         h('div', { class: 'os-gadget' }, info.gadget),
+        ratingBars(sel.op),
         h('p', {}, info.ability),
         h('div', { class: 'os-label' }, 'PRIMARY'),
         loadout,
+        weaponBars(sel.weapon),
       ),
     );
   };

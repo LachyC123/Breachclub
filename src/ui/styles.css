@@ -2180,3 +2180,103 @@ button {
     padding: 6px 24px;
   }
 }
+
+/* operator ratings and weapon stats */
+.ratings {
+  display: flex;
+  gap: 14px;
+  margin: 3px 0 2px;
+}
+.rating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--dim);
+}
+.pips3 {
+  display: flex;
+  gap: 2px;
+}
+.pips3 i {
+  width: 14px;
+  height: 6px;
+  background: var(--line2);
+  transform: skewX(-20deg);
+}
+.pips3 i.on {
+  background: var(--amber);
+}
+.wbars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  margin-top: 5px;
+  max-width: 360px;
+}
+.wbar {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--cond);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+.wbar div {
+  height: 4px;
+  background: var(--line);
+}
+.wbar i {
+  display: block;
+  height: 100%;
+  background: var(--text);
+}
+
+.hurt-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(255, 30, 20, 0.55));
+}
+.kill-pops {
+  position: absolute;
+  left: 58%;
+  top: 40%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+}
+.kpop {
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: calc(16px * var(--text-scale));
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 2px #000;
+  animation: kpopin 180ms ease-out;
+  transition: opacity 350ms, transform 350ms;
+}
+.kpop b {
+  color: var(--red);
+  letter-spacing: 0.14em;
+}
+.kpop em {
+  font-style: normal;
+  color: var(--amber);
+}
+.kpop.out {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+@keyframes kpopin {
+  from {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}

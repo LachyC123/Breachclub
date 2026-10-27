@@ -261,6 +261,7 @@ export class MatchRunner implements Runner {
     const mates = w.actors.filter((a) => a.team === 0 && a.alive);
     if (!mates.length || w.phase === 'ended') return;
     this.state = 'takeover';
+    this.hud.elim(null);
     this.takeoverAuto = this.realTime + 2.2;
     this.ctx.sfx.play('takeover');
     const note = (id: number) => {
@@ -615,6 +616,10 @@ export class MatchRunner implements Runner {
       this.ctx.sfx.play(win ? 'round_win' : 'round_lose');
       this.roundEndAt = this.realTime + 2.2;
       this.input.controls.reset();
+      // the round result replaces any death or takeover prompt
+      this.hud.elim(null);
+      this.setOverlay(null);
+      if (this.state === 'dead' || this.state === 'takeover') this.state = 'spectate';
     }
   }
 }
