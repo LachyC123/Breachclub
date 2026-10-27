@@ -48,7 +48,8 @@ export function updatePerception(w: World) {
     // gadgets: own team always known; enemy gadgets only when seen
     const ents = new Set<number>();
     for (const ent of w.entities) {
-      if (ent.team === team) {
+      // barrels are part of the map: everyone knows where they are
+      if (ent.team === team || ent.kind === 'barrel') {
         ents.add(ent.id);
         continue;
       }

@@ -21,6 +21,7 @@ import type { Actor, ActorIntent, CoverEntity, HingeEntity, Obb, SledEntity, Vec
 import { DRONE_VISION } from './perception';
 import type { World } from './world';
 import { ACTOR_RADIUS, moveCircle } from './movement';
+import { hitBarrel } from './explosions';
 
 export const SLED_SPEED = 6;
 export const SLED_RANGE = 6;
@@ -43,7 +44,7 @@ export const CHARGE_DAMAGE = 35;
 
 // ---------- walls ----------
 
-export function breachSoftGroup(w: World, group: number, by: number, cause: 'sled' | 'charge' | 'gunfire') {
+export function breachSoftGroup(w: World, group: number, by: number, cause: 'sled' | 'charge' | 'gunfire' | 'explosion') {
   const st = w.soft[group];
   if (st.state !== 'intact') return false;
   st.state = 'breached';
@@ -87,6 +88,8 @@ export function damageEntity(w: World, id: number, amount: number, by: number) {
       removeEntity(w, e.id);
       w.emit({ type: 'hingeDestroyed', hingeId: e.id, pos: { ...e.center } });
     }
+  } else if (e.kind === 'barrel') {
+    hitBarrel(w, e, amount, by);
   } else if (e.kind === 'drone') {
     e.hp -= amount;
     if (e.hp <= 0) {

@@ -4,7 +4,8 @@ import { secs } from '../content/defs';
 import { angleTo, dist, normAngle } from '../sim/geometry';
 import { canSee } from '../sim/perception';
 import { canShoot } from '../sim/combat';
-import type { Actor, ActorIntent, DroneEntity, Vec } from '../sim/types';
+import type { Actor, ActorIntent, BarrelEntity, DroneEntity, Vec } from '../sim/types';
+import { BARREL_RADIUS } from '../sim/explosions';
 import type { World } from '../sim/world';
 import type { BotState, DiffParams, Perception } from './types';
 import { coverFrom, followPath } from './locomotion';
@@ -76,14 +77,17 @@ export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff: Di
     intent.interact = true;
     return true;
   }
-  const d = dist(a.pos, target.pos);
-  const trueAng = angleTo(a.pos, target.pos);
+  // an enemy standing by a barrel: shoot the barrel instead (never with a teammate in the blast)
+  const barrel = juicyBarrel(w, a, target);
+  const aimAt = barrel ? barrel.pos : target.pos;
+  const d = dist(a.pos, aimAt);
+  const trueAng = angleTo(a.pos, aimAt);
   // aim settles over time; sideways target motion is harder to track
   const since = (w.tick - b.acquiredTick) / 60;
   const settle = Math.min(1, since / diff.settle);
   const perpX = -Math.sin(trueAng);
   const perpY = Math.cos(trueAng);
-  const lateral = Math.abs(target.vel.x * perpX + target.vel.y * perpY);
+  const lateral = barrel ? 0 : Math.abs(target.vel.x * perpX + target.vel.y * perpY);
   const noise = w.rng.gauss() * (diff.aimBase * 0.5 + diff.leadError * lateral);
   const desired = trueAng + b.aimOffset * (1 - settle) + noise;
   intent.aim = turnToward(a, desired, diff.turnRate);
@@ -159,6 +163,18 @@ export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff: Di
   intent.move = { x: mx, y: my };
   intent.ads = Math.hypot(mx, my) < 0.1 && a.weapon.pellets === 1;
   return true;
+}
+
+function juicyBarrel(w: World, a: Actor, target: Actor): BarrelEntity | null {
+  if (w.phase === 'prep') return null;
+  for (const e of w.entities) {
+    if (e.kind !== 'barrel' || e.fuseTick >= 0) continue;
+    if (dist(e.pos, target.pos) > 1.9 || dist(e.pos, a.pos) < 3.4) continue;
+    if (w.actors.some((x) => x.alive && x.team === a.team && dist(x.pos, e.pos) < BARREL_RADIUS + 0.3)) continue;
+    if (!canSee(w, a.pos, e.pos)) continue;
+    return e;
+  }
+  return null;
 }
 
 /** Defenders shoot recon drones they can actually see (same reaction rules as actors). */

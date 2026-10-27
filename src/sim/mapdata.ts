@@ -62,6 +62,8 @@ export interface VaultLink {
 
 export interface MapData {
   id: string;
+  /** explosive barrel spawn points */
+  barrels: Vec[];
   name: string;
   w: number;
   h: number;
@@ -267,6 +269,7 @@ function buildFromDef(def: MapDef): MapData {
     entries: def.entries,
     defenderSpawns: def.defenderSpawns.map(([x, y]) => ({ x, y })),
     objectiveRoom: def.objectiveRoom,
+    barrels: (def.barrels ?? []).map(([x, y]) => ({ x, y })),
     interior,
   };
 }

@@ -3,6 +3,7 @@
 import { secs } from '../content/defs';
 import { RANGE_TARGETS } from '../content/rangeMap';
 import { moveCircle } from './movement';
+import { BARREL_HP } from './explosions';
 import type { World } from './world';
 
 const RESPAWN = 1.6;
@@ -62,6 +63,17 @@ export function stepRange(w: World) {
       w.barricades[di] = { hp: 40, team: w.defendTeam, damaged: false };
       delete w.rangeTimers[k];
       w.bumpGeometry();
+    }
+  });
+  // blown barrels come back after a few seconds
+  w.map.barrels.forEach((p, i) => {
+    if (w.entities.some((e) => e.kind === 'barrel' && Math.abs(e.pos.x - p.x) < 0.01 && Math.abs(e.pos.y - p.y) < 0.01)) return;
+    const k = `barrel${i}`;
+    w.rangeTimers[k] ??= w.tick;
+    if (w.tick - w.rangeTimers[k] >= secs(WALL_RESET) && !w.actors.some((a) => a.alive && Math.hypot(a.pos.x - p.x, a.pos.y - p.y) < 0.8)) {
+      w.entities.push({ kind: 'barrel', id: w.newEntityId(), team: 0, ownerId: -1, pos: { ...p }, hp: BARREL_HP, fuseTick: -1, lastHitBy: -1 });
+      w.bumpGeometry();
+      delete w.rangeTimers[k];
     }
   });
   for (const a of w.actors) {

@@ -106,6 +106,8 @@ export class DefenceBrain {
       // and doesn't cross their sightlines to get there
       if (s !== current && threats.some((t) => segDist(t, a.pos, s.pos) < 4)) score -= 8;
       if (early && !onSite(s) && spawns.some((sp) => dist(sp, s.pos) < 8)) score -= 10;
+      // don't camp next to a live barrel
+      if (w.entities.some((e) => e.kind === 'barrel' && dist(e.pos, s.pos) < 2.6)) score -= 5;
       // gentle variety between rounds, stable within one
       score += ((s.id.length * 7 + b.slot * 13 + w.cfg.seed) % 10) / 10;
       score -= dist(a.pos, s.pos) * 0.08;

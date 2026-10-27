@@ -105,4 +105,16 @@ export const SPIN_CYCLE: MapDef = {
   doorRooms: SPIN_CYCLE_META.doorRooms,
   protectedDoors: ['P', 'Q', 'R'],
   shell: [2, 2, 31, 22],
+  // explosive barrels: street, alley, shop, stock, service and one in the office
+  barrels: [
+    [13.5, 24.5],
+    [24.5, 24.5],
+    [22.5, 0.8],
+    [29.5, 16.5],
+    [18.5, 19.5],
+    [28.5, 9.5],
+    [20.5, 13.5],
+    [4.5, 19.5],
+    [10.5, 9.5],
+  ],
 };

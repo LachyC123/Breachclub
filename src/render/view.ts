@@ -10,6 +10,7 @@ import {
   buildHingeSheet,
   buildCharge,
   buildDrone,
+  buildBarrel,
   buildMuzzle,
   buildDust,
   buildRing,
@@ -140,6 +141,8 @@ export function generateTextures(scene: Phaser.Scene) {
   addCanvas(scene, 'charge1', buildCharge(true));
   for (let f = 0; f < 3; f++) addCanvas(scene, `muzzle${f}`, buildMuzzle(f));
   addCanvas(scene, 'fxlight', buildLightTexture());
+  addCanvas(scene, 'barrel0', buildBarrel(false));
+  addCanvas(scene, 'barrel1', buildBarrel(true));
   for (let f = 0; f < 4; f++) addCanvas(scene, `dust${f}`, buildDust(f));
   for (const k of ['player', 'ally', 'enemy', 'ghost'] as const) addCanvas(scene, `ring_${k}`, buildRing(k));
   for (const s of ['idle', 'arming', 'armed'] as const) for (const b of [0, 1]) addCanvas(scene, `console_${s}_${b}`, consoleSprite(s, b).c);
@@ -406,6 +409,26 @@ export class WorldView {
           this.addShake(1, 0.12);
           break;
         }
+        case 'explosion': {
+          const seen = this.pointVisible(e.pos) || w.actor(e.by)?.team === 0;
+          const big = e.radius > 1.5;
+          if (seen) {
+            // fireball, smoke column, debris, shockwave, scorch
+            this.juice.smoke(e.pos, big ? 10 : 4, big ? 3 : 1.4, null, P.amber);
+            this.juice.smoke(e.pos, big ? 8 : 3, big ? 3.5 : 1.5, null, P.slate3);
+            this.juice.sparks(e.pos, big ? 26 : 10, P.yellow, big ? 200 : 120);
+            this.burst(e.pos, big ? 18 : 8, P.coralLight, 120, 0.6, 160, true);
+            this.juice.shockwave(e.pos, e.radius * 1.3, P.amberLight);
+            this.juice.scorch(e.pos, Math.min(1.8, e.radius * 0.6));
+            this.juice.muzzleLight(e.pos, big ? 5 : 2.5);
+            if (!this.reducedFlash) this.flashAt(e.pos);
+          }
+          // you feel it more the closer you are
+          const me = w.actor(this.humanId);
+          const d = me ? Math.hypot(me.pos.x - e.pos.x, me.pos.y - e.pos.y) : 20;
+          this.addShake(Math.max(0.6, (big ? 4 : 2) * (1 - Math.min(1, d / 14))), big ? 0.35 : 0.2);
+          break;
+        }
         case 'slide': {
           const a = w.actor(e.actorId);
           if (a && vis(a.id)) this.juice.smoke(a.pos, 3, 0.8, Math.atan2(-a.vel.y, -a.vel.x), P.cream);
@@ -572,11 +595,11 @@ export class WorldView {
     const live = new Set<number>();
     for (const e of w.entities) {
       live.add(e.id);
-      const seen = e.team === 0 || w.visibleEntities[0].has(e.id);
+      const seen = e.kind === 'barrel' || e.team === 0 || w.visibleEntities[0].has(e.id);
       let spr = this.ents.get(e.id) as Phaser.GameObjects.Sprite | undefined;
       if (!spr) {
-        const key = e.kind === 'charge' ? 'charge0' : e.kind === 'drone' ? 'drone_0_0' : e.kind;
-        spr = this.scene.add.sprite(0, 0, key, e.kind === 'charge' || e.kind === 'drone' ? undefined : 0);
+        const key = e.kind === 'charge' ? 'charge0' : e.kind === 'drone' ? 'drone_0_0' : e.kind === 'barrel' ? 'barrel0' : e.kind;
+        spr = this.scene.add.sprite(0, 0, key, e.kind === 'charge' || e.kind === 'drone' || e.kind === 'barrel' ? undefined : 0);
         this.ents.set(e.id, spr);
       }
       spr.setVisible(seen);
@@ -597,6 +620,12 @@ export class WorldView {
         // mirror for angles in the second quadrant
         const a = (((e.angle % Math.PI) + Math.PI) % Math.PI);
         spr.setFlipX(a > Math.PI / 2 + 0.01);
+      } else if (e.kind === 'barrel') {
+        // cooking off: flashes faster and faster, jitters
+        const lit = e.fuseTick >= 0 && Math.floor(this.time * 18) % 2 === 0;
+        const jit = e.fuseTick >= 0 ? Math.round((Math.random() - 0.5) * 2) : 0;
+        spr.setTexture(lit ? 'barrel1' : 'barrel0').setOrigin(0.5, 0.8).setPosition(Math.round(e.pos.x * T) + jit, Math.round(e.pos.y * T)).setDepth(100 + e.pos.y * T);
+        if (e.fuseTick >= 0 && this.frame % 3 === 0) this.juice.sparks({ x: e.pos.x, y: e.pos.y - 0.4 }, 2, P.yellow, 60, -Math.PI / 2);
       } else if (e.kind === 'drone') {
         const roll = Math.floor(e.stepAccum * 6) % 2;
         spr.setTexture(`drone_${Math.floor(this.time * 3) % 2}_${roll}`).setPosition(Math.round(e.pos.x * T), Math.round(e.pos.y * T)).setDepth(100 + e.pos.y * T);

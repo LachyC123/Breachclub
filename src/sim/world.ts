@@ -28,6 +28,7 @@ import { stepGadgetCommands, stepEntities, stepDrones, deployDrone } from './gad
 import { updatePerception, propagateSound } from './perception';
 import { stepRules } from './rules';
 import { stepRange } from './range';
+import { BARREL_HP, stepBarrels } from './explosions';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 export type NewEvent = DistributiveOmit<SimEvent, 'id'>;
@@ -133,6 +134,7 @@ export class World implements GeoState {
     this.knownSoft = [this.soft.map(() => 'intact'), this.soft.map(() => 'intact')];
     this.knownBarricade = [this.barricades.map(() => false), this.barricades.map(() => false)];
     this.spawnActors();
+    for (const p of this.map.barrels) this.entities.push({ kind: 'barrel', id: this.newEntityId(), team: 0, ownerId: -1, pos: { ...p }, hp: BARREL_HP, fuseTick: -1, lastHitBy: -1 });
     // Siege-style recon: every attacker starts prep driving their first drone
     if (this.phaseEndTick > 0 && this.cfg.mode !== 'range') for (const a of this.actors) if (a.side === 'attack') deployDrone(this, a);
     if (this.phaseEndTick <= 0) {
@@ -297,6 +299,7 @@ export class World implements GeoState {
     stepMovement(this, get);
     stepDrones(this, get);
     stepEntities(this);
+    stepBarrels(this);
     // 3. geometry revisions are applied atomically inside the gadget/wall handlers
     // 4. perception from the updated geometry
     updatePerception(this);

@@ -201,6 +201,9 @@ export class Feedback {
           if (a && a.id === human?.id && e.cause === 'sled') this.stats.sledBreach = roomAt(w.map, w.map.softGroups[e.group].center)?.name ?? 'a room';
           break;
         }
+        case 'barrelLit':
+          if (this.pointSeen(w, e.pos)) this.playAt(w, 'charge_beep', e.pos, 10, false, 0.9);
+          break;
         case 'slide': {
           const sl = w.actor(e.actorId);
           if (sl && (sl.team === 0 || w.visible[0].has(sl.id))) this.playAt(w, 'slide', sl.pos, 8, false, sl.id === human?.id ? 1 : 0.7);

@@ -59,4 +59,11 @@ export const RANGE_MAP: MapDef = {
   softGroupRooms: { a: ['yard', 'house'], b: ['yard', 'house'], c: ['yard', 'house'] },
   doorRooms: { '1': ['yard', 'house'] },
   protectedDoors: [],
+  // barrels beside some targets: shoot the drum, not the dummy
+  barrels: [
+    [4.5, 12.5],
+    [11.5, 6.5],
+    [16.5, 17.5],
+    [23.5, 16.5],
+  ],
 };

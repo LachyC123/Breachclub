@@ -150,7 +150,9 @@ describe('restart hygiene', () => {
     expect(snap(a)).toBe(snap(b));
     for (let i = 0; i < 20; i++) {
       const w = makeWorld({ seed: 9 });
-      expect(w.entities.map((e) => e.kind)).toEqual([]);
+      // only the map's intact barrels: no leftover gadgets from earlier rounds
+      expect(w.entities.filter((e) => e.kind !== 'barrel')).toEqual([]);
+      expect(w.entities.filter((e) => e.kind === 'barrel').length).toBe(w.map.barrels.length);
       expect(w.events.length).toBe(0);
       expect(snap(w)).toBe(snap(a));
     }

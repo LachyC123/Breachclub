@@ -30,4 +30,6 @@ export interface MapDef {
   protectedDoors: string[];
   /** extra inclusive rectangle treated as building interior for prep confinement */
   shell?: [number, number, number, number];
+  /** explosive barrel positions (tile space) */
+  barrels?: Array<[number, number]>;
 }

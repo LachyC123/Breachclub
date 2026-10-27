@@ -223,7 +223,20 @@ export interface DroneEntity {
   stepAccum: number;
 }
 
-export type Entity = SledEntity | CoverEntity | HingeEntity | ChargeEntity | DroneEntity;
+/** Explosive barrel: neutral map hazard (team is unused), always known to both teams. */
+export interface BarrelEntity {
+  kind: 'barrel';
+  id: number;
+  team: TeamId;
+  ownerId: number;
+  pos: Vec;
+  hp: number;
+  /** tick it explodes after being shot (-1 = intact) */
+  fuseTick: number;
+  lastHitBy: number;
+}
+
+export type Entity = SledEntity | CoverEntity | HingeEntity | ChargeEntity | DroneEntity | BarrelEntity;
 
 export interface TagMark {
   pos: Vec;
@@ -257,7 +270,7 @@ export type SimEvent =
   | { type: 'shot'; id: number; actorId: number; from: Vec; to: Vec; hitActor: number | null; hitSurface: 'wall' | 'soft' | 'barricade' | 'gadget' | 'prop' | 'none'; weapon: string }
   | { type: 'damage'; id: number; actorId: number; amount: number; sourceId: number; hpAfter: number }
   | { type: 'death'; id: number; actorId: number; killerId: number }
-  | { type: 'wallBreached'; id: number; group: number; by: number; cause: 'sled' | 'charge' | 'gunfire' }
+  | { type: 'wallBreached'; id: number; group: number; by: number; cause: 'sled' | 'charge' | 'gunfire' | 'explosion' }
   | { type: 'barricadeBroken'; id: number; door: number; by: number }
   | { type: 'barricadePlaced'; id: number; door: number; team: TeamId }
   | { type: 'barricadeRemoved'; id: number; door: number; team: TeamId }
@@ -293,6 +306,8 @@ export type SimEvent =
   | { type: 'objectiveFound'; id: number; team: TeamId }
   | { type: 'vault'; id: number; actorId: number }
   | { type: 'slide'; id: number; actorId: number }
+  | { type: 'barrelLit'; id: number; barrelId: number; pos: Vec }
+  | { type: 'explosion'; id: number; pos: Vec; radius: number; cause: 'barrel' | 'missile' | 'round'; by: number }
   | { type: 'phase'; id: number; phase: Phase }
   | { type: 'roundEnded'; id: number; winner: TeamId; reason: RoundReason }
   | { type: 'sound'; id: number; sound: SoundEvent }

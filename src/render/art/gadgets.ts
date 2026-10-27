@@ -129,6 +129,28 @@ export function buildDrone(blink: boolean, roll = 0): HTMLCanvasElement {
   return p.c;
 }
 
+/** Explosive drum: red steel barrel with ribs and a hazard flame mark. `lit` flashes when cooking off. */
+export function buildBarrel(lit: boolean): HTMLCanvasElement {
+  const p = new Pix(12, 15);
+  const body = lit ? P.white : P.coral;
+  const shade = lit ? P.cream2 : P.coralDark;
+  const deep = lit ? P.creamDark : P.coralDeep;
+  p.rect(1, 3, 10, 11, body);
+  p.vl(9, 3, 13, shade).vl(10, 3, 13, deep);
+  p.vl(2, 3, 13, P.coralLight);
+  // ribs
+  p.hl(1, 10, 6, shade).hl(1, 10, 10, shade);
+  // lid
+  p.ellipse(6, 3, 5, 2, deep);
+  p.ellipse(6, 3, 4, 1, shade);
+  p.px(8, 3, P.slate3);
+  // hazard flame
+  p.rect(4, 7, 4, 3, P.yellow);
+  p.px(5, 7, P.amberDark).px(6, 8, P.coralDeep).px(5, 9, P.amberDark);
+  p.outline(P.outline);
+  return p.c;
+}
+
 export function buildMuzzle(frame: number): HTMLCanvasElement {
   const p = new Pix(9, 9);
   const c = 4;
