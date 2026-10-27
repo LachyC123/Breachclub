@@ -1720,7 +1720,7 @@ button {
 .hint {
   position: absolute;
   left: 50%;
-  top: calc(112px + var(--safe-t));
+  top: calc(128px + var(--safe-t));
   transform: translateX(-50%);
   max-width: 50vw;
   text-align: center;
@@ -2147,5 +2147,36 @@ button {
   .od-fig canvas {
     width: 72px !important;
     height: 96px !important;
+  }
+}
+@media (max-height: 430px) {
+  .roundend {
+    gap: 4px;
+  }
+  .roundend .re-title {
+    font-size: 34px;
+  }
+  .roundend .sb-row,
+  .matchend .sb-row {
+    font-size: 14px;
+    padding: 0 8px;
+  }
+  .roundend .sb-row img,
+  .matchend .sb-row img {
+    width: 20px;
+    height: 20px;
+  }
+  .roundend .sb-row.head {
+    font-size: 9px;
+  }
+  .roundend .sb-th {
+    padding: 2px 10px;
+  }
+  .roundend .sb-title {
+    font-size: 15px;
+  }
+  .roundend .cta {
+    min-height: 38px;
+    padding: 6px 24px;
   }
 }

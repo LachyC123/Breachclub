@@ -12,6 +12,7 @@ import type { World } from '../sim/world';
 import { findPath, navGrid, type PathPoint } from './nav';
 import { postPlantSpots } from './tactics';
 import type { BotState, Task } from './types';
+import { aiDriven } from './control';
 
 interface Checkpoint {
   pos: Vec;
@@ -105,7 +106,7 @@ export function buildAttackPlan(w: World, team: TeamId, canBreach: boolean, from
 
 /** Team stage advances once everyone is stacked (or waited long enough) and nobody is in a fight. */
 export function advancePlan(w: World, plan: AttackPlan, bots: Map<number, BotState>) {
-  const members = w.actors.filter((a) => a.team === plan.team && a.alive && a.controller === 'bot' && bots.get(a.id)?.role !== 'flank');
+  const members = w.actors.filter((a) => a.team === plan.team && a.alive && aiDriven(a) && bots.get(a.id)?.role !== 'flank');
   const cp = plan.checkpoints[Math.min(plan.stage, plan.checkpoints.length - 1)];
   const mainActive = members.length > 0 && plan.stage < plan.checkpoints.length - 1;
   const arrived = members.filter((a) => dist(a.pos, cp.pos) < 2.2).length;
@@ -191,7 +192,7 @@ export function planBreach(w: World, a: Actor, target: number): Task | null {
 /** Choose who breaches: Ram's sled if available, else whoever carries a charge, closest first. */
 export function breacherFor(w: World, team: TeamId, target: number, bots: Map<number, BotState>): Actor | null {
   const center = target >= 100 ? w.map.doors[target - 100].center : w.map.softGroups[target].center;
-  const cands = w.actors.filter((a) => a.team === team && a.alive && a.controller === 'bot' && bots.get(a.id)?.role !== 'flank');
+  const cands = w.actors.filter((a) => a.team === team && a.alive && aiDriven(a) && bots.get(a.id)?.role !== 'flank');
   const ram = cands.find((a) => a.operatorId === 'ram' && a.gadgetCharges > 0);
   if (ram && target < 100) return ram;
   return cands.filter((a) => a.breachCharges > 0 || target >= 100).sort((x, y) => dist(x.pos, center) - dist(y.pos, center))[0] ?? ram ?? null;

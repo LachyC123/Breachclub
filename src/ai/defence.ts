@@ -10,6 +10,7 @@ import { findPath, navGrid } from './nav';
 import { approachOf, holdSpotsFor, type HoldSpot } from './tactics';
 import type { BotState, Perception, Task } from './types';
 import { threatPoints } from './memory';
+import { aiDriven, playerDriven } from './control';
 
 const HINGE_SOCKETS: Array<{ x: number; y: number; vertical: boolean }> = [
   { x: 5.5, y: 8.5, vertical: false },
@@ -50,10 +51,10 @@ export class DefenceBrain {
     if (w.phase === 'armed') {
       const team = a.team;
       const defenders = w.actors.filter((x) => x.team === team && x.alive);
-      const humanShutting = defenders.some((x) => x.controller === 'human' && x.interaction?.kind === 'shutoff');
+      const humanShutting = defenders.some((x) => playerDriven(x) && x.interaction?.kind === 'shutoff');
       // the defender closest to the console goes; others cover from site spots
       const c = w.map.console.center;
-      const closest = defenders.filter((x) => x.controller === 'bot').sort((x, y) => dist(x.pos, c) - dist(y.pos, c))[0];
+      const closest = defenders.filter((x) => aiDriven(x)).sort((x, y) => dist(x.pos, c) - dist(y.pos, c))[0];
       if (!humanShutting && closest && closest.id === a.id) {
         b.task = { kind: 'shutoff' };
         return;

@@ -19,6 +19,7 @@ import { saveSettings } from './settings';
 import type { World } from '../sim/world';
 import type { ActorIntent, Vec } from '../sim/types';
 import type { Order } from '../ai/brain';
+import { setAutopilot } from '../ai/control';
 
 type State = 'loading' | 'opselect' | 'spawn' | 'playing' | 'dead' | 'takeover' | 'spectate' | 'roundend' | 'matchend' | 'paused';
 
@@ -601,6 +602,7 @@ export class MatchRunner implements Runner {
       // viewing a teammate's drone: yours sits still
       if (drone && !drone.own && intent.drone) intent.drone = { move: { x: 0, y: 0 }, tag: false };
       if (import.meta.env.DEV && this.ctx.debug.autopilot) intent = m.ai.intentFor(h.id);
+      else setAutopilot(h, false);
     }
     const ended = m.step(intent);
     const events = w.events;

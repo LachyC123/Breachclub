@@ -17,6 +17,7 @@ import { engage, idleAim } from './combat';
 import { advancePlan, breacherFor, buildAttackPlan, driveDrone, escortGoal, planBreach, postPlantTask, slotOffset, type AttackPlan } from './attack';
 import { DefenceBrain } from './defence';
 import { dangerField, nextPortalAlong } from './tactics';
+import { aiDriven, playerDriven, setAutopilot } from './control';
 
 export type { Order, BotStatus } from './types';
 export { DIFFICULTY } from './types';
@@ -97,11 +98,12 @@ export class AIDirector {
     this.defence.release(actorId);
   }
 
-  /** Development autopilot: the same bot logic drives a human-controlled actor. */
+  /** Development autopilot: the same bot logic drives a human-controlled actor (counted as a bot). */
   intentFor(actorId: number): ActorIntent {
     const a = this.w.actor(actorId);
     const b = this.bots.get(actorId);
     if (!a || !b || !a.alive) return emptyIntent();
+    setAutopilot(a, true);
     return this.botTick(a, b);
   }
 
@@ -129,12 +131,12 @@ export class AIDirector {
   }
 
   private human(): Actor | undefined {
-    return this.w.actors.find((a) => a.controller === 'human' && a.alive);
+    return this.w.actors.find((a) => playerDriven(a) && a.alive);
   }
 
   /** Bots on the player's attacking squad escort the player unless told to push. */
   private escorting(a: Actor, b: BotState): boolean {
-    if (a.team !== 0 || a.side !== 'attack' || a.controller !== 'bot') return false;
+    if (a.team !== 0 || a.side !== 'attack' || !aiDriven(a)) return false;
     if (b.order.kind === 'push') return false;
     const h = this.human();
     return !!h && h.team === a.team;
@@ -163,7 +165,7 @@ export class AIDirector {
   }
 
   private decide(a: Actor, b: BotState, p: Perception) {
-    if (a.team === 0 && a.controller === 'bot' && b.order.kind === 'hold') {
+    if (a.team === 0 && aiDriven(a) && b.order.kind === 'hold') {
       b.task = { kind: 'hold', pos: b.order.pos, watch: null, label: 'Holding' };
       return;
     }
@@ -191,7 +193,7 @@ export class AIDirector {
       // clock runs low or the player is far from site
       const c = w.map.console.center;
       if (h && dist(a.pos, c) < 6 && (w.secondsLeft() < 35 || dist(h.pos, c) > 9)) {
-        const nearest = w.actors.filter((x) => x.team === a.team && x.alive && x.controller === 'bot').sort((x, y) => dist(x.pos, c) - dist(y.pos, c))[0];
+        const nearest = w.actors.filter((x) => x.team === a.team && x.alive && aiDriven(x)).sort((x, y) => dist(x.pos, c) - dist(y.pos, c))[0];
         if (nearest?.id === a.id) {
           b.task = { kind: 'arm' };
           b.status = 'Arming';
@@ -242,8 +244,7 @@ export class AIDirector {
     const cps = isFlank ? plan.flank! : plan.checkpoints;
     if (stage >= cps.length - 1) {
       // on site: one planter (the closest), everyone else covers an entrance
-      // (the actor being thought for counts even when human: the dev autopilot drives the player)
-      const living = w.actors.filter((x) => x.team === team && x.alive && (x.controller === 'bot' || x.id === a.id));
+      const living = w.actors.filter((x) => x.team === team && x.alive && aiDriven(x));
       const c = w.map.console.center;
       let planter = w.actor(plan.planterId);
       const closest = living.sort((x, y) => dist(x.pos, c) - dist(y.pos, c))[0];
@@ -251,7 +252,7 @@ export class AIDirector {
         planter = closest;
         plan.planterId = planter?.id ?? -1;
       }
-      const humanArming = w.actors.some((x) => x.team === team && x.controller === 'human' && x.interaction?.kind === 'arm');
+      const humanArming = w.actors.some((x) => x.team === team && playerDriven(x) && x.interaction?.kind === 'arm');
       if (planter && planter.id === a.id && !humanArming) b.task = { kind: 'arm' };
       else b.task = postPlantTask(w, b.slot);
       return;

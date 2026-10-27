@@ -7,6 +7,7 @@ import type { Actor, ActorIntent, Vec } from '../sim/types';
 import type { World } from '../sim/world';
 import { findPath, smooth, walkable, navGrid } from './nav';
 import type { BotState } from './types';
+import { playerDriven } from './control';
 
 export interface MoveOpts {
   arrive?: number;
@@ -93,7 +94,7 @@ export function followPath(w: World, a: Actor, b: BotState, goal: Vec, intent: A
       dx += ((a.pos.x - o.pos.x) / od) * 0.4;
       dy += ((a.pos.y - o.pos.y) / od) * 0.4;
     }
-    if (o.controller === 'human' && od < 6) {
+    if (playerDriven(o) && od < 6) {
       const fx = Math.cos(o.facing);
       const fy = Math.sin(o.facing);
       const rx = a.pos.x - o.pos.x;

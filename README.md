@@ -2,7 +2,7 @@
 
 A 2D top-down pixel-art squad breaching game for mobile browsers. You play 3v3 against bots on attack and defence. Operators are distinct because of what their gadgets do to the room.
 
-This is the **first playable slice** (milestones M0–M2): one map (Spin Cycle laundrette), two signature operators (Ram, Hinge) and four temporary basic squadmates. Rounds run on the full rules. The design pack this is built from is in [`docs/`](docs/) ([`docs/00_PACK_README.md`](docs/00_PACK_README.md) explains the pack). Build status, evidence and known gaps are in [`PROGRESS.md`](PROGRESS.md).
+This is the **first playable slice** (milestones M0–M2, plus a feedback pass for a tactical-shooter feel): one map (Spin Cycle laundrette), two signature operators (Ram, Hinge) and four temporary basic squadmates. Rounds run on the full rules. The design pack this is built from is in [`docs/`](docs/) ([`docs/00_PACK_README.md`](docs/00_PACK_README.md) explains the pack). Build status, evidence and known gaps are in [`PROGRESS.md`](PROGRESS.md).
 
 ## Run it
 
@@ -23,17 +23,39 @@ npm run sim          # long headless bot-vs-bot rounds with event logs
 npm run validate     # design-pack fixture validator
 ```
 
+## Flow
+
+The main menu has four tabs:
+- **PLAY:** Quick Match (first to 2) or Standard (first to 3), plus a bot difficulty and starting-side choice.
+- **OPERATORS:** the roster.
+- **TRAINING:** Shooting Range and two single-round situations.
+- **SETTINGS.**
+
+A match runs:
+1. Loading screen.
+2. Each round: pick your operator and primary weapon (teammates take the rest).
+3. Attackers choose a spawn on the map overview.
+4. Preparation: attackers are on drone cams, defenders fortify.
+5. Action.
+6. Round summary with scoreboard and MVP.
+7. Match results.
+
 ## Controls
 
-| | Touch (landscape) | Keyboard + mouse |
+| | Touch (landscape, CODM-style) | Keyboard + mouse |
 |---|---|---|
-| Move | Drag anywhere on the left half (floating stick) | W A S D |
-| Aim + fire | Drag on the right half. You fire while dragging and stop when you let go. | Mouse aims, hold left button to fire |
-| Gadget | **GADGET** button (see below) | Hold **Q** to preview, release to commit, tap **Q** for the second action. Right click or Esc cancels. |
-| Interact | Hold **INTERACT**. The label changes with what's nearby: Arm, Shut Off, Breach, Reinforce, Barricade, Remove, Vault | Hold **E** |
-| Reload | **Reload** | **R** |
-| Squad orders | **Orders** → Follow me / Hold here / Play objective | **Tab** |
-| Pause | Pause button (top right). The game also pauses when the app goes to the background or the phone turns to portrait. | **Esc** |
+| Move | Drag on the left side (floating stick) | W A S D |
+| Aim | Drag on the right side. This aims only; it never fires. | Mouse |
+| Fire | Hold the big **FIRE** button. Drag your thumb off it to steer your aim while firing. | Hold left button |
+| Aim down sights | **ADS** toggle: slower movement, tighter spread, the camera looks further ahead | Hold right button or Shift |
+| Gadget | **GADGET** button (see below) | Hold **Q** to preview, release to commit, tap **Q** for the second action. Esc cancels. |
+| Interact | Hold **INTERACT**. It appears only when something is in reach: Arm, Shut Off, Breach, Reinforce, Barricade, Remove, Vault. | Hold **E** |
+| Reload | **RELOAD** | **R** |
+| Drone (attack prep) | Left stick drives, **TAG** pings every defender in view, **NEXT CAM** cycles squad drones | W A S D, **F** tag, **N** or Space next cam |
+| Scoreboard / orders | Top-left buttons | **Tab** / **C** |
+| Pause | Top-left pause. The game also pauses on app switch or portrait. | **Esc** |
+
+A laser sight runs from your muzzle to the first thing that blocks it, and turns red when it lies on a visible enemy. Hits show a white marker; kills show a red one.
 
 **Ram (attack): bumper sled**
 - Hold GADGET and drag to aim. A dotted route shows where the sled goes: an amber ring marks the panel it will break, a red X marks a hard stop.
@@ -41,21 +63,20 @@ npm run validate     # design-pack fixture validator
 - Tap GADGET again to brake. The sled unfolds into a shield that protects both teams.
 
 **Hinge (defence): pivot wall**
-- Hold GADGET and drag to place the wall. It lies across the direction you drag.
-- Tap GADGET to swing it 90°. The whole swing must be clear.
-- If someone is in the way, it refuses and says why, and no cooldown is used.
+- Hold GADGET and drag to place the wall.
+- Tap GADGET to swing it 90°. The whole swing must be clear; if it isn't, it refuses, says why, and uses no cooldown.
 
-**Prep (attack):** tap GADGET to drive the shared scouting puck. It can go through open doors but sees nothing through walls. If you don't drive it, a teammate scouts with it.
+**Prep (attack):** every attacker has two recon drones. They see through open doors but never through walls, and one bullet destroys one. When a drone dies, your spare deploys. Tags last 5 s and show as red diamonds.
 
-**Prep (defence):** stand at a dashed wall panel and hold INTERACT to reinforce it, or at a doorway to barricade it. The amber-marked doorways and the service window can never be sealed.
+**Prep (defence):** stand at a dashed wall panel and hold INTERACT to reinforce it, or at a doorway to barricade it. Shoot drones you see.
 
 ## Rules in one breath
 
-- Each round has 25 s of prep, then 120 s of action.
-- Attackers hold Interact on the office console for 3 s to arm it, which starts a 30 s broadcast. Defenders must hold Interact for 3 s to shut it off.
-- Eliminating the other team, the clock running out (defenders win) and the broadcast finishing (attackers win) all end the round. The tie-breaks in `docs/02` are implemented exactly.
-- When you die, you take over a surviving teammate exactly as they are: same health, position, ammo and gadget.
-- A match is first to three round wins, and you swap sides every round. Practice plays a single round.
+- Each round has 30 s of prep (20 s in Quick Match), then 120 s of action.
+- Attackers hold Interact on the office console for 3 s to arm it, which starts a 30 s broadcast. Defenders hold Interact for 3 s to shut it off.
+- A round ends when one team is eliminated, when the clock runs out (defenders win) or when the broadcast finishes (attackers win). The tie-breaks in `docs/02` are implemented exactly.
+- When you die you see who got you. Then you take over a surviving teammate exactly as they are.
+- Sides swap every round.
 
 ## Tech
 
