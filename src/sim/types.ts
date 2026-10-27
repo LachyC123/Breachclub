@@ -46,6 +46,9 @@ export type GadgetCommand =
   | { type: 'hingePlace'; x: number; y: number; vertical: boolean }
   | { type: 'hingeRotate' };
 
+/** Active wild-card use: drop a sentry turret at your feet, or call a missile on a point. */
+export type CardCommand = { type: 'turret' } | { type: 'missile'; x: number; y: number };
+
 /** One tick of intent. Humans and bots use the exact same interface. */
 export interface ActorIntent {
   move: Vec;
@@ -61,6 +64,7 @@ export interface ActorIntent {
   drone: { move: Vec; tag: boolean } | null;
   /** burst slide in the move direction (cooldown) */
   slide: boolean;
+  card: CardCommand | null;
 }
 
 export const emptyIntent = (): ActorIntent => ({
@@ -73,6 +77,7 @@ export const emptyIntent = (): ActorIntent => ({
   ads: false,
   drone: null,
   slide: false,
+  card: null,
 });
 
 export interface Actor {
@@ -125,6 +130,12 @@ export interface Actor {
   /** active slide: locked direction until this tick */
   slide: { dir: Vec; until: number } | null;
   slideReadyTick: number;
+  /** base health plus any Kevlar card */
+  maxHp: number;
+  /** Poison Rounds damage over time */
+  poison: { until: number; dps: number; by: number; nextTick: number } | null;
+  /** bullets fired this round (Explosive Rounds) */
+  shotCount: number;
 }
 
 export type SoftState = 'intact' | 'reinforced' | 'breached';
@@ -236,7 +247,33 @@ export interface BarrelEntity {
   lastHitBy: number;
 }
 
-export type Entity = SledEntity | CoverEntity | HingeEntity | ChargeEntity | DroneEntity | BarrelEntity;
+/** Sentry Turret card: auto-gun that fires at enemies it can see, for a limited time. */
+export interface TurretEntity {
+  kind: 'turret';
+  id: number;
+  team: TeamId;
+  ownerId: number;
+  pos: Vec;
+  facing: number;
+  hp: number;
+  level: number;
+  expiresTick: number;
+  nextShotTick: number;
+  targetId: number;
+  acquiredTick: number;
+}
+
+/** Missile Strike card: a telegraphed impact point (both teams see the warning). */
+export interface MissileEntity {
+  kind: 'missile';
+  id: number;
+  team: TeamId;
+  ownerId: number;
+  pos: Vec;
+  impactTick: number;
+}
+
+export type Entity = SledEntity | CoverEntity | HingeEntity | ChargeEntity | DroneEntity | BarrelEntity | TurretEntity | MissileEntity;
 
 export interface TagMark {
   pos: Vec;
@@ -268,7 +305,7 @@ export interface HeardSound {
 
 export type SimEvent =
   | { type: 'shot'; id: number; actorId: number; from: Vec; to: Vec; hitActor: number | null; hitSurface: 'wall' | 'soft' | 'barricade' | 'gadget' | 'prop' | 'none'; weapon: string }
-  | { type: 'damage'; id: number; actorId: number; amount: number; sourceId: number; hpAfter: number }
+  | { type: 'damage'; id: number; actorId: number; amount: number; sourceId: number; hpAfter: number; dot?: boolean }
   | { type: 'death'; id: number; actorId: number; killerId: number }
   | { type: 'wallBreached'; id: number; group: number; by: number; cause: 'sled' | 'charge' | 'gunfire' | 'explosion' }
   | { type: 'barricadeBroken'; id: number; door: number; by: number }
@@ -306,6 +343,13 @@ export type SimEvent =
   | { type: 'objectiveFound'; id: number; team: TeamId }
   | { type: 'vault'; id: number; actorId: number }
   | { type: 'slide'; id: number; actorId: number }
+  | { type: 'turretDeployed'; id: number; turretId: number; ownerId: number }
+  | { type: 'turretShot'; id: number; turretId: number; from: Vec; to: Vec; hitActor: number | null }
+  | { type: 'turretDestroyed'; id: number; turretId: number; pos: Vec }
+  | { type: 'turretExpired'; id: number; turretId: number; pos: Vec }
+  | { type: 'missileIncoming'; id: number; missileId: number; pos: Vec; team: TeamId; ownerId: number }
+  | { type: 'pulse'; id: number; team: TeamId }
+  | { type: 'healed'; id: number; actorId: number; amount: number }
   | { type: 'barrelLit'; id: number; barrelId: number; pos: Vec }
   | { type: 'explosion'; id: number; pos: Vec; radius: number; cause: 'barrel' | 'missile' | 'round'; by: number }
   | { type: 'phase'; id: number; phase: Phase }

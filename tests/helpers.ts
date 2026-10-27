@@ -1,7 +1,8 @@
 import { World } from '../src/sim/world';
+import type { TeamCards } from '../src/content/cards';
 import { emptyIntent, type ActorIntent, type Actor, type Vec } from '../src/sim/types';
 
-export function makeWorld(opts: Partial<{ attackTeam: 0 | 1; prep: number; action: number; seed: number }> = {}): World {
+export function makeWorld(opts: Partial<{ attackTeam: 0 | 1; prep: number; action: number; seed: number; cards: [TeamCards, TeamCards] }> = {}): World {
   const attackTeam = opts.attackTeam ?? 0;
   return new World({
     seed: opts.seed ?? 1,
@@ -12,6 +13,7 @@ export function makeWorld(opts: Partial<{ attackTeam: 0 | 1; prep: number; actio
     difficulty: 'club',
     prepSeconds: opts.prep ?? 0,
     actionSeconds: opts.action ?? 120,
+    cards: opts.cards,
   });
 }
 

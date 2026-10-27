@@ -5,6 +5,8 @@ import { cellBlocks, closestOnObb, type GeoState } from './geometry';
 import type { Actor, ActorIntent, Vec } from './types';
 import type { World } from './world';
 import { SPEED_MULT, WEAPON_HANDLING, statsOf } from '../content/handling';
+import { lvl } from '../content/cards';
+import { ADRENALINE } from './cards';
 
 export const ACTOR_RADIUS = 0.32;
 
@@ -177,7 +179,7 @@ export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
       a.ads = false;
     }
     // operator speed rating, slower while aiming, and a brief stagger after each shot
-    let speed = speedBase * SPEED_MULT[statsOf(a.operatorId).speed] * (a.ads ? hd.adsMove : 1);
+    let speed = speedBase * SPEED_MULT[statsOf(a.operatorId).speed] * (a.ads ? hd.adsMove : 1) * (1 + ADRENALINE[lvl(w.cards[a.team], 'adrenaline')]);
     if (w.tick < a.nextShotTick && a.mag < a.weapon.magazine) speed *= hd.fireMove;
     if (a.flinchUntil >= w.tick) speed *= 0.7;
     const dx = mx * speed * DT + a.shove.x;
@@ -193,8 +195,10 @@ export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
       a.stepAccum += sp * DT;
       if (a.stepAccum >= 0.85) {
         a.stepAccum = 0;
-        const radius = sp > speedBase * 0.6 ? 4 : 2;
-        w.emitSound(a.pos, 'step', radius, a.team, a.id);
+        // Ghost Step: half the reach, then silent
+        const ghost = lvl(w.cards[a.team], 'ghost');
+        const radius = (sp > speedBase * 0.6 ? 4 : 2) * (ghost === 1 ? 0.5 : 1);
+        if (ghost < 2) w.emitSound(a.pos, 'step', radius, a.team, a.id);
       }
     }
   }

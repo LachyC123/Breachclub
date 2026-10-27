@@ -22,6 +22,7 @@ import { DRONE_VISION } from './perception';
 import type { World } from './world';
 import { ACTOR_RADIUS, moveCircle } from './movement';
 import { hitBarrel } from './explosions';
+import { damageTurret } from './cards';
 
 export const SLED_SPEED = 6;
 export const SLED_RANGE = 6;
@@ -90,6 +91,8 @@ export function damageEntity(w: World, id: number, amount: number, by: number) {
     }
   } else if (e.kind === 'barrel') {
     hitBarrel(w, e, amount, by);
+  } else if (e.kind === 'turret') {
+    if (w.actor(by)?.team !== e.team) damageTurret(w, e, amount);
   } else if (e.kind === 'drone') {
     e.hp -= amount;
     if (e.hp <= 0) {

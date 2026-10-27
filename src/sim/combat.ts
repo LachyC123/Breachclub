@@ -6,6 +6,9 @@ import type { World } from './world';
 import { breachSoftGroup, destroyBarricade, damageEntity } from './gadgets';
 import { ACTOR_RADIUS } from './movement';
 import { ARMOUR_DAMAGE, WEAPON_HANDLING, statsOf } from '../content/handling';
+import { lvl } from '../content/cards';
+import { EXPLOSIVE_DAMAGE, EXPLOSIVE_EVERY, HOLLOW, POISON_DPS, POISON_SECONDS, QUICKDRAW } from './cards';
+import { explode } from './explosions';
 
 const HIT_RADIUS = 0.4;
 const SOFT_GUNFIRE_FACTOR = 0.15;
@@ -26,9 +29,10 @@ export function canShoot(w: World, a: Actor): boolean {
 export function startReload(w: World, a: Actor): boolean {
   if (a.reloadUntil >= 0 || a.reserve <= 0 || a.mag >= a.weapon.magazine || a.interaction) return false;
   const hd = WEAPON_HANDLING[a.weapon.id];
-  a.reloadUntil = w.tick + secs(hd.reload === 'shell' ? hd.shellSeconds : a.weapon.reload_seconds);
+  const quick = 1 - QUICKDRAW[lvl(w.cards[a.team], 'quickdraw')];
+  a.reloadUntil = w.tick + secs((hd.reload === 'shell' ? hd.shellSeconds : a.weapon.reload_seconds) * quick);
   w.emit({ type: 'reloadStart', actorId: a.id });
-  w.emitSound(a.pos, 'reload', 3, a.team, a.id);
+  if (lvl(w.cards[a.team], 'ghost') < 3) w.emitSound(a.pos, 'reload', 3, a.team, a.id);
   return true;
 }
 
@@ -45,7 +49,7 @@ export function stepReloads(w: World, get: (a: Actor) => ActorIntent) {
       a.mag++;
       a.reserve--;
       if (a.mag < a.weapon.magazine && a.reserve > 0) {
-        a.reloadUntil = w.tick + secs(WEAPON_HANDLING[a.weapon.id].shellSeconds);
+        a.reloadUntil = w.tick + secs(WEAPON_HANDLING[a.weapon.id].shellSeconds * (1 - QUICKDRAW[lvl(w.cards[a.team], 'quickdraw')]));
         w.emitSound(a.pos, 'reload', 2, a.team, a.id);
       } else {
         a.reloadUntil = -1;
@@ -95,6 +99,10 @@ function fire(w: World, a: Actor) {
     w.emit({ type: 'reloadEnd', actorId: a.id });
   }
   a.mag--;
+  a.shotCount++;
+  // Explosive Rounds: every Nth bullet detonates where it lands
+  const ex = lvl(w.cards[a.team], 'explosive');
+  const boom = ex > 0 && a.shotCount % EXPLOSIVE_EVERY[ex] === 0;
   a.nextShotTick = w.tick + Math.max(1, secs(wpn.interval_seconds));
   const moving = (Math.hypot(a.vel.x, a.vel.y) > 0.5 ? hd.movingSpread : 0) + (a.slide ? 0.05 : 0);
   const adsK = a.ads ? 0.4 : 1;
@@ -117,9 +125,11 @@ function fire(w: World, a: Actor) {
       ang += w.rng.gauss() * spread * 0.5;
     }
     const end = { x: origin.x + Math.cos(ang) * maxRange, y: origin.y + Math.sin(ang) * maxRange };
-    traceBullet(w, a, origin, end, wpn.damage);
+    const landed = traceBullet(w, a, origin, end, wpn.damage);
+    if (p === 0 && boom) explode(w, landed, { radius: 1.1, damage: EXPLOSIVE_DAMAGE, sourceId: a.id, cause: 'round', breaks: false });
   }
-  w.emitSound(a.pos, 'shot', 12, a.team, a.id);
+  // Ghost Step III also muffles gunfire
+  w.emitSound(a.pos, 'shot', lvl(w.cards[a.team], 'ghost') >= 3 ? 8 : 12, a.team, a.id);
 }
 
 function falloff(a: Actor, d: number): number {
@@ -129,7 +139,7 @@ function falloff(a: Actor, d: number): number {
   return 1 - 0.65 * ((d - eff) / eff);
 }
 
-function traceBullet(w: World, a: Actor, from: Vec, to: Vec, baseDamage: number) {
+function traceBullet(w: World, a: Actor, from: Vec, to: Vec, baseDamage: number): Vec {
   const hit = raycast(w, from, to, 'bullet', { obs: w.obstacles() });
   let tWall = hit ? hit.t : 1;
   const dx = to.x - from.x;
@@ -156,8 +166,11 @@ function traceBullet(w: World, a: Actor, from: Vec, to: Vec, baseDamage: number)
   if (best) {
     const d = dist(from, best.pos);
     // armour soaks part of every bullet; heavy guns knock the target back
-    const dmg = Math.round(baseDamage * falloff(a, d) * ARMOUR_DAMAGE[statsOf(best.operatorId).armour]);
+    const hollow = 1 + HOLLOW[lvl(w.cards[a.team], 'hollow')];
+    const dmg = Math.round(baseDamage * falloff(a, d) * ARMOUR_DAMAGE[statsOf(best.operatorId).armour] * hollow);
     w.damageActor(best, dmg, a.id);
+    const pz = lvl(w.cards[a.team], 'poison');
+    if (pz && best.alive && w.phase !== 'prep') best.poison = { until: w.tick + secs(POISON_SECONDS), dps: POISON_DPS[pz], by: a.id, nextTick: best.poison?.nextTick ?? w.tick + secs(0.5) };
     const push = WEAPON_HANDLING[a.weapon.id].shove * falloff(a, d);
     if (push > 0 && w.phase !== 'prep') {
       const len = Math.hypot(dx, dy) || 1;
@@ -165,7 +178,7 @@ function traceBullet(w: World, a: Actor, from: Vec, to: Vec, baseDamage: number)
       best.shove = { x: best.shove.x + (dx / len) * push * 0.5, y: best.shove.y + (dy / len) * push * 0.5 };
     }
     w.emit({ type: 'shot', actorId: a.id, from, to: endPoint, hitActor: best.id, hitSurface: 'none', weapon: a.weapon.id });
-    return;
+    return endPoint;
   }
   let surface: 'wall' | 'soft' | 'barricade' | 'gadget' | 'prop' | 'none' = 'none';
   if (hit) {
@@ -203,4 +216,5 @@ function traceBullet(w: World, a: Actor, from: Vec, to: Vec, baseDamage: number)
   }
   w.emit({ type: 'shot', actorId: a.id, from, to: endPoint, hitActor: null, hitSurface: surface, weapon: a.weapon.id });
   void ACTOR_RADIUS;
+  return endPoint;
 }

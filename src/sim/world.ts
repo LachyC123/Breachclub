@@ -29,6 +29,8 @@ import { updatePerception, propagateSound } from './perception';
 import { stepRules } from './rules';
 import { stepRange } from './range';
 import { BARREL_HP, stepBarrels } from './explosions';
+import { lvl, type TeamCards } from '../content/cards';
+import { stepCards, KEVLAR, VAMPIRE } from './cards';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 export type NewEvent = DistributiveOmit<SimEvent, 'id'>;
@@ -52,6 +54,8 @@ export interface RoundConfig {
   mapId?: MapId;
   /** 'range' never ends: targets respawn and walls regenerate */
   mode?: 'match' | 'range';
+  /** wild cards each team holds (level per card) for this round */
+  cards?: [TeamCards, TeamCards];
   /** the human's chosen primary (loadout); defaults to the operator's weapon */
   humanWeapon?: WeaponDef['id'];
 }
@@ -114,12 +118,17 @@ export class World implements GeoState {
   /** drone/ping tags per team: enemy id -> marker */
   marks: [Map<number, TagMark>, Map<number, TagMark>] = [new Map(), new Map()];
   objectiveFound: [boolean, boolean] = [false, false];
+  /** wild cards per team and this round's active-card charges */
+  cards: [TeamCards, TeamCards];
+  cardCharges: [{ turret: number; missile: number }, { turret: number; missile: number }];
   /** shooting-range reset timers keyed by feature */
   rangeTimers: Record<string, number> = {};
   private obsCache: { rev: number; tick: number; list: ObstacleRef[] } | null = null;
 
   constructor(cfg: RoundConfig) {
     this.cfg = cfg;
+    this.cards = cfg.cards ?? [{}, {}];
+    this.cardCharges = [0, 1].map((t) => ({ turret: lvl(this.cards[t], 'turret'), missile: lvl(this.cards[t], 'missile') })) as World['cardCharges'];
     this.map = buildMap(cfg.mapId ?? 'spin_cycle');
     this.rng = new Rng(cfg.seed);
     this.attackTeam = cfg.attackTeam;
@@ -177,12 +186,15 @@ export class World implements GeoState {
           prevPos: { x: 0, y: 0 },
           vel: { x: 0, y: 0 },
           facing,
-          hp: RULES.base_health,
+          hp: RULES.base_health + KEVLAR[lvl(this.cards[team], 'kevlar')],
+          maxHp: RULES.base_health + KEVLAR[lvl(this.cards[team], 'kevlar')],
+          poison: null,
+          shotCount: 0,
           alive: true,
           diedTick: -1,
           weapon,
           mag: weapon.magazine,
-          reserve: weapon.magazine * 3,
+          reserve: weapon.magazine * (3 + lvl(this.cards[team], 'quickdraw')),
           reloadUntil: -1,
           nextShotTick: 0,
           bloom: 0,
@@ -298,6 +310,7 @@ export class World implements GeoState {
     // 2. movement + active gadget motion
     stepMovement(this, get);
     stepDrones(this, get);
+    stepCards(this, get);
     stepEntities(this);
     stepBarrels(this);
     // 3. geometry revisions are applied atomically inside the gadget/wall handlers
@@ -318,7 +331,7 @@ export class World implements GeoState {
     for (const a of this.actors) a.interactHeldLastTick = a.alive && get(a).interact;
   }
 
-  damageActor(target: Actor, amount: number, sourceId: number) {
+  damageActor(target: Actor, amount: number, sourceId: number, dot = false) {
     if (!target.alive || amount <= 0) return;
     if (this.phase === 'prep') return;
     const dealt = Math.min(target.hp, amount);
@@ -332,7 +345,7 @@ export class World implements GeoState {
     }
     target.flinchUntil = this.tick + secs(0.12);
     this.damagedThisTick.add(target.id);
-    this.emit({ type: 'damage', actorId: target.id, amount, sourceId, hpAfter: target.hp });
+    this.emit({ type: 'damage', actorId: target.id, amount, sourceId, hpAfter: target.hp, ...(dot ? { dot: true } : {}) });
   }
 
   private resolveDeaths() {
@@ -347,7 +360,19 @@ export class World implements GeoState {
         a.vaulting = null;
         a.deaths++;
         const killer = this.actor(a.lastDamagedBy);
-        if (killer && killer.team !== a.team) killer.kills++;
+        if (killer && killer.team !== a.team) {
+          killer.kills++;
+          // Vampire card: kills heal the killer
+          const v = lvl(this.cards[killer.team], 'vampire');
+          if (v && killer.alive) {
+            const heal = Math.min(killer.maxHp - killer.hp, VAMPIRE[v]);
+            if (heal > 0) {
+              killer.hp += heal;
+              this.emit({ type: 'healed', actorId: killer.id, amount: heal });
+            }
+          }
+        }
+        a.poison = null;
         for (const id of a.damagedBy) if (id !== a.lastDamagedBy) this.actor(id)!.assists++;
         a.damagedBy = [];
         this.emit({ type: 'death', actorId: a.id, killerId: a.lastDamagedBy });
