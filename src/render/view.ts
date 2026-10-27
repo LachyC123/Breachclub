@@ -165,6 +165,9 @@ export class WorldView {
   private hits: HitMark[] = [];
   private humanId = -1;
   private zoom = 3;
+  /** wider view while aiming down sights */
+  private adsZoom = 2;
+  private curZoom = 3;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -864,23 +867,31 @@ export class WorldView {
     }
   }
 
-  /** Integer zoom keeps pixels crisp: about eight and a half tiles of height on any screen. */
+  /** Integer zoom keeps pixels crisp: about eight and a half tiles of height on any screen.
+   *  Aiming down sights pulls the camera out one step (a third more view) so you see further. */
   fit() {
     const cam = this.scene.cameras.main;
     this.zoom = Math.max(2, Math.min(8, Math.round(window.innerHeight / 135)));
+    // phones (zoom 3) go to 2; tiny screens use 1.5 so ADS still widens the view
+    this.adsZoom = this.zoom <= 2 ? 1.5 : Math.max(2, Math.round(this.zoom * 0.67));
+    this.curZoom = this.zoom;
     cam.setZoom(this.zoom);
   }
 
   private updateCamera(humanId: number, focus: Vec | null, ads: boolean, dt: number) {
     const w = this.world;
     const cam = this.scene.cameras.main;
-    if (cam.zoom !== this.zoom) cam.setZoom(this.zoom);
     const h = w.actor(humanId);
+    // ease between the hip and ADS zoom (~0.2 s), then settle exactly on the step for crisp pixels
+    const want = ads && !focus && h?.alive ? this.adsZoom : this.zoom;
+    this.curZoom += (want - this.curZoom) * (1 - Math.pow(0.0001, dt));
+    if (Math.abs(want - this.curZoom) < 0.02) this.curZoom = want;
+    if (cam.zoom !== this.curZoom) cam.setZoom(this.curZoom);
     const f = focus ?? (h ? h.pos : w.map.console.center);
     let target: Vec = { x: f.x * T, y: f.y * T - 6 };
     if (!focus && h && h.alive) {
       // look ahead where the player aims: further while aiming down sights
-      const viewH = window.innerHeight / this.zoom;
+      const viewH = window.innerHeight / this.curZoom;
       const lead = (ads ? 4 : 1.6) * T;
       target = { x: target.x + Math.cos(h.facing) * lead, y: target.y + Math.sin(h.facing) * Math.min(lead, viewH * 0.3) };
     }

@@ -41,7 +41,7 @@ Your feedback: the layout, menus and practice didn't feel like a tactical shoote
   - Left floating move stick.
   - Right floating stick only aims.
   - Big **FIRE** button: hold to shoot, and drag off it to steer while firing.
-  - **ADS** toggle: 0.55× move speed, 0.4× spread, a longer camera look-ahead.
+  - **ADS** toggle: the camera pulls out one zoom step (3× → 2× on a phone, about 2.25× the visible area) over about 0.2 s, and looks further ahead. Move speed is 0.55× and spread 0.4×.
   - Reload, Gadget, and a contextual Interact that only appears when something is in reach.
 - Desktop: the mouse aims, left click fires, right click or Shift for ADS, Tab for the scoreboard, C for orders, F to tag, N for the next cam.
 - Laser sight from the muzzle to the first sight blocker. It turns red when it lies on a visible enemy.

@@ -47,7 +47,7 @@ A match runs:
 | Move | Drag on the left side (floating stick) | W A S D |
 | Aim | Drag on the right side. This aims only; it never fires. | Mouse |
 | Fire | Hold the big **FIRE** button. Drag your thumb off it to steer your aim while firing. | Hold left button |
-| Aim down sights | **ADS** toggle: slower movement, tighter spread, the camera looks further ahead | Hold right button or Shift |
+| Aim down sights | **ADS** toggle: the camera pulls out for a wider view and looks further ahead; slower movement, tighter spread | Hold right button or Shift |
 | Gadget | **GADGET** button (see below) | Hold **Q** to preview, release to commit, tap **Q** for the second action. Esc cancels. |
 | Interact | Hold **INTERACT**. It appears only when something is in reach: Arm, Shut Off, Breach, Reinforce, Barricade, Remove, Vault. | Hold **E** |
 | Reload | **RELOAD** | **R** |
