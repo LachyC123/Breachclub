@@ -1,6 +1,6 @@
-// Match flow (best of five, side swap each round) and the fixed-step driver.
+// Match flow (first to N round wins, sides swap each round) and the fixed-step driver.
 // Renderer-agnostic so it can run headless in tests.
-import { RULES, secs } from '../content/defs';
+import { secs, type Side, type WeaponDef } from '../content/defs';
 import { World, type Difficulty, type RoundConfig } from '../sim/world';
 import { AIDirector } from '../ai/brain';
 import type { ActorIntent, TeamId } from '../sim/types';
@@ -10,14 +10,18 @@ export interface MatchConfig {
   difficulty: Difficulty;
   /** side the player starts on */
   playerStartSide: 'attack' | 'defence';
-  /** signature operator the player picked for each side */
-  attackOperator: string;
-  defenceOperator: string;
-  attackEntry: string;
-  /** single-round practice */
-  singleRound?: boolean;
+  /** rounds needed to win: 1 = single situation, 2 = quick match, 3 = standard */
+  winsNeeded: number;
   prepSeconds?: number;
   actionSeconds?: number;
+}
+
+/** What the player chose on the operator/spawn screens before a round. */
+export interface RoundPick {
+  op: string;
+  weapon?: WeaponDef['id'];
+  /** attacker spawn (entry point id) */
+  entry?: string;
 }
 
 export interface RoundRecord {
@@ -28,8 +32,11 @@ export interface RoundRecord {
   highlight: string;
 }
 
-export const ATTACK_SQUAD_FILL = ['recruit_mo', 'recruit_tess'];
-export const DEFENCE_SQUAD_FILL = ['recruit_dex', 'recruit_june'];
+/** Each side fields three distinct operators: one signature specialist and two recruits. */
+export const SIDE_SQUADS: Record<Side, string[]> = {
+  attack: ['ram', 'recruit_mo', 'recruit_tess'],
+  defence: ['hinge', 'recruit_dex', 'recruit_june'],
+};
 
 export class Match {
   cfg: MatchConfig;
@@ -38,11 +45,13 @@ export class Match {
   rounds: RoundRecord[] = [];
   world!: World;
   ai!: AIDirector;
+  pick: RoundPick;
   readonly matchId: string;
 
-  constructor(cfg: MatchConfig) {
+  constructor(cfg: MatchConfig, pick?: RoundPick) {
     this.cfg = cfg;
     this.matchId = `m${cfg.seed.toString(36)}${Date.now().toString(36)}`;
+    this.pick = pick ?? this.defaultPick();
     this.startRound();
   }
 
@@ -51,28 +60,32 @@ export class Match {
     return round % 2 === 0 ? first : first === 'attack' ? 'defence' : 'attack';
   }
 
-  startRound() {
+  defaultPick(): RoundPick {
+    const side = this.playerSide();
+    return { op: SIDE_SQUADS[side][0], entry: 'front' };
+  }
+
+  /** (Re)build this round's world with the player's pick; score is untouched. */
+  startRound(pick: RoundPick = this.pick) {
+    this.pick = pick;
     const side = this.playerSide();
     const attackTeam: TeamId = side === 'attack' ? 0 : 1;
-    const playerOp = side === 'attack' ? this.cfg.attackOperator : this.cfg.defenceOperator;
-    const enemyOp = side === 'attack' ? 'hinge' : 'ram';
-    const playerFill = side === 'attack' ? ATTACK_SQUAD_FILL : DEFENCE_SQUAD_FILL;
-    const enemyFill = side === 'attack' ? DEFENCE_SQUAD_FILL : ATTACK_SQUAD_FILL;
+    const enemySide: Side = side === 'attack' ? 'defence' : 'attack';
+    const own = SIDE_SQUADS[side].includes(pick.op) ? pick.op : SIDE_SQUADS[side][0];
+    const playerSquad = [own, ...SIDE_SQUADS[side].filter((o) => o !== own)];
     const seed = (this.cfg.seed * 7919 + this.roundIndex * 104729) >>> 0;
     const entries = ['front', 'window', 'rear'];
-    const entry = side === 'attack' ? this.cfg.attackEntry : entries[seed % 3];
+    const entry = side === 'attack' ? (pick.entry ?? 'front') : entries[seed % 3];
     const rc: RoundConfig = {
       seed,
       attackTeam,
-      squads: [
-        [playerOp, ...playerFill],
-        [enemyOp, ...enemyFill],
-      ],
+      squads: [playerSquad, [...SIDE_SQUADS[enemySide]]],
       humanIndex: 0,
       attackEntry: entry,
       difficulty: this.cfg.difficulty,
       prepSeconds: this.cfg.prepSeconds,
       actionSeconds: this.cfg.actionSeconds,
+      humanWeapon: pick.weapon,
     };
     this.world = new World(rc);
     this.ai = new AIDirector(this.world);
@@ -104,12 +117,13 @@ export class Match {
   }
 
   get matchOver(): boolean {
-    if (this.cfg.singleRound) return this.rounds.length >= 1;
-    return this.score[0] >= RULES.wins_to_match || this.score[1] >= RULES.wins_to_match;
+    return this.score[0] >= this.cfg.winsNeeded || this.score[1] >= this.cfg.winsNeeded;
   }
 
+  /** Advance to the next round (sides swap) with a default pick until the player chooses. */
   nextRound() {
     this.roundIndex++;
+    this.pick = { ...this.defaultPick(), weapon: undefined };
     this.startRound();
   }
 }

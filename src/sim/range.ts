@@ -44,11 +44,11 @@ export function stepRange(w: World) {
   for (const [gi, s] of w.soft.entries()) {
     if (s.state === 'breached') {
       const k = `soft${gi}`;
-      rangeTimers[k] ??= w.tick;
-      if (w.tick - rangeTimers[k] >= secs(WALL_RESET) && !w.actors.some((a) => a.alive && w.map.softGroups[gi].cells.some((c) => Math.floor(a.pos.x) === c % w.map.w && Math.floor(a.pos.y) === Math.floor(c / w.map.w)))) {
+      w.rangeTimers[k] ??= w.tick;
+      if (w.tick - w.rangeTimers[k] >= secs(WALL_RESET) && !w.actors.some((a) => a.alive && w.map.softGroups[gi].cells.some((c) => Math.floor(a.pos.x) === c % w.map.w && Math.floor(a.pos.y) === Math.floor(c / w.map.w)))) {
         s.state = 'intact';
         s.hp = 100;
-        delete rangeTimers[k];
+        delete w.rangeTimers[k];
         w.bumpGeometry();
       }
     }
@@ -56,11 +56,11 @@ export function stepRange(w: World) {
   w.map.doors.forEach((d, di) => {
     if (w.barricades[di]) return;
     const k = `door${di}`;
-    rangeTimers[k] ??= w.tick;
+    w.rangeTimers[k] ??= w.tick;
     const occupied = w.actors.some((a) => a.alive && d.cells.some((c) => Math.abs(a.pos.x - ((c % w.map.w) + 0.5)) < 0.9 && Math.abs(a.pos.y - (Math.floor(c / w.map.w) + 0.5)) < 0.9));
-    if (w.tick - rangeTimers[k] >= secs(WALL_RESET) && !occupied) {
+    if (w.tick - w.rangeTimers[k] >= secs(WALL_RESET) && !occupied) {
       w.barricades[di] = { hp: 40, team: w.defendTeam, damaged: false };
-      delete rangeTimers[k];
+      delete w.rangeTimers[k];
       w.bumpGeometry();
     }
   });
@@ -72,27 +72,22 @@ export function stepRange(w: World) {
     const spent = a.gadgetCharges <= 0 || a.breachCharges <= 0;
     const k = `gadget${a.id}`;
     if (spent && !busy) {
-      rangeTimers[k] ??= w.tick;
-      if (w.tick - rangeTimers[k] >= secs(GADGET_RESET)) {
+      w.rangeTimers[k] ??= w.tick;
+      if (w.tick - w.rangeTimers[k] >= secs(GADGET_RESET)) {
         a.gadgetCharges = 1;
         a.breachCharges = 1;
-        delete rangeTimers[k];
+        delete w.rangeTimers[k];
       }
     } else if (busy && a.operatorId === 'hinge') {
       // a placed pivot wall is cleared after a while so it can be placed again
       const h = w.entities.find((e) => e.ownerId === a.id && e.kind === 'hinge');
-      rangeTimers[k] ??= w.tick;
-      if (h && w.tick - rangeTimers[k] >= secs(30)) {
+      w.rangeTimers[k] ??= w.tick;
+      if (h && w.tick - w.rangeTimers[k] >= secs(30)) {
         w.entities = w.entities.filter((e) => e !== h);
         w.bumpGeometry();
-        delete rangeTimers[k];
+        delete w.rangeTimers[k];
       }
-    } else delete rangeTimers[k];
+    } else delete w.rangeTimers[k];
   }
 }
 
-/** per-world timers keyed by feature (reset when a new range world is created) */
-let rangeTimers: Record<string, number> = {};
-export function resetRangeTimers() {
-  rangeTimers = {};
-}

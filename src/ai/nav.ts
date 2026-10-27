@@ -18,7 +18,7 @@ export interface NavGrid {
 
 const cache = new Map<string, NavGrid>();
 
-/** 'free' ignores prep confinement (the scouting puck may enter the building). */
+/** 'free' ignores prep confinement (recon drones may enter the building). */
 export type NavSide = Side | 'free';
 
 function key(w: World, side: NavSide) {

@@ -22,7 +22,8 @@ export type SfxName =
   | 'hinge_ratchet' | 'hinge_swing' | 'hinge_blocked' | 'hinge_place'
   | 'invalid' | 'death' | 'vault'
   | 'console_tick' | 'armed_alarm' | 'shutoff' | 'round_win' | 'round_lose'
-  | 'ui_tap' | 'ui_confirm' | 'ui_back' | 'takeover' | 'prep_start' | 'action_start' | 'low_time';
+  | 'ui_tap' | 'ui_confirm' | 'ui_back' | 'takeover' | 'prep_start' | 'action_start' | 'low_time'
+  | 'hitmarker' | 'kill_confirm' | 'drone_tag' | 'drone_move';
 
 export type SfxCategory = 'weapons' | 'world' | 'ui' | 'ambience' | 'music';
 
@@ -52,6 +53,7 @@ const CATEGORY: Record<SfxName, SfxCategory> = {
   invalid: 'ui', death: 'world', vault: 'world',
   console_tick: 'world', armed_alarm: 'world', shutoff: 'world', round_win: 'ui', round_lose: 'ui',
   ui_tap: 'ui', ui_confirm: 'ui', ui_back: 'ui', takeover: 'ui', prep_start: 'ui', action_start: 'ui', low_time: 'ui',
+  hitmarker: 'weapons', kill_confirm: 'weapons', drone_tag: 'ui', drone_move: 'world',
 };
 
 /** Internal mix trims per category (multiplied with the user's slider). */
@@ -699,6 +701,25 @@ const SYN: Record<SfxName, (s: Syn) => void> = {
       s.tone({ type: 'sawtooth', f, a: 0.005, hold: 0.08, d: 0.2, peak: 0.06, filt: 'lowpass', ff: 700, ff1: 4000, fglide: 0.1 });
     }
     s.tone({ type: 'square', f: 587.33, at: 0.12, hold: 0.05, d: 0.18, peak: 0.055, filt: 'lowpass', ff: 3000 });
+  },
+  hitmarker: (s) => {
+    // short dry tick: confirms a hit without masking the gunfire
+    s.noise({ filt: 'bandpass', ff: 4200, q: 4, d: 0.018, peak: 0.35 });
+    s.tone({ type: 'square', f: 2100, d: 0.02, peak: 0.04, filt: 'lowpass', ff: 5000 });
+  },
+  kill_confirm: (s) => {
+    s.noise({ filt: 'bandpass', ff: 3200, q: 3, d: 0.03, peak: 0.45 });
+    s.tone({ type: 'triangle', f: 740, f1: 1480, glide: 0.06, d: 0.12, peak: 0.12 });
+    s.tone({ f: 120, f1: 60, d: 0.12, peak: 0.25 });
+  },
+  drone_tag: (s) => {
+    s.tone({ type: 'square', f: 1568, hold: 0.02, d: 0.04, peak: 0.06, filt: 'lowpass', ff: 4000 });
+    s.tone({ type: 'square', f: 2093, at: 0.06, hold: 0.02, d: 0.06, peak: 0.06, filt: 'lowpass', ff: 4000 });
+  },
+  drone_move: (s) => {
+    // small electric motor whine with tyre grit
+    s.tone({ type: 'sawtooth', f: 180, f1: 240, glide: 0.15, a: 0.02, hold: 0.06, d: 0.08, peak: 0.05, filt: 'lowpass', ff: 900 });
+    s.noise({ filt: 'highpass', ff: 5000, a: 0.01, d: 0.06, peak: 0.04 });
   },
   low_time: (s) => {
     // tick-tock warning, lower + slower than charge_beep

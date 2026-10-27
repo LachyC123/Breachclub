@@ -106,16 +106,25 @@ export function buildCharge(blink: boolean): HTMLCanvasElement {
   return p.c;
 }
 
-/** Scouting puck: squat wheeled camera disc with an amber lens and blinking antenna. */
-export function buildPuck(blink: boolean): HTMLCanvasElement {
-  const p = new Pix(12, 10);
-  p.ellipse(6, 6, 5, 3, P.navy2);
-  p.hl(2, 9, 4, P.slate2);
-  p.ellipse(6, 5, 3, 2, P.slate);
-  p.px(6, 5, P.amberLight).px(7, 5, P.amber);
-  p.vl(3, 0, 3, P.slate3);
-  p.px(3, 0, blink ? P.tealLight : P.tealDark);
-  p.rect(1, 7, 2, 2, P.ink).rect(9, 7, 2, 2, P.ink);
+/** Recon drone: two fat wheels either side of a low camera body, amber lens, blinking antenna.
+ *  `roll` alternates the wheel tread so it reads as driving. */
+export function buildDrone(blink: boolean, roll = 0): HTMLCanvasElement {
+  const p = new Pix(14, 11);
+  // wheels
+  for (const x of [0, 10]) {
+    p.rect(x, 3, 4, 7, P.ink);
+    p.rect(x + 1, 4, 2, 5, P.slate);
+    for (let y = 4 + (roll % 2); y < 9; y += 2) p.hl(x + 1, x + 2, y, P.slate3);
+  }
+  // body
+  p.rect(4, 4, 6, 5, P.navy2);
+  p.hl(4, 9, 4, P.slate2);
+  p.rect(5, 5, 4, 3, P.slate);
+  // lens
+  p.rect(6, 6, 2, 2, P.amber).px(6, 6, P.amberLight);
+  // antenna
+  p.vl(8, 0, 3, P.slate3);
+  p.px(8, 0, blink ? P.tealLight : P.tealDark);
   p.outline(P.outline);
   return p.c;
 }
@@ -189,7 +198,13 @@ export type IconName =
   | 'ready'
   | 'cancel'
   | 'sound'
-  | 'puck';
+  | 'drone'
+  | 'tag'
+  | 'ads'
+  | 'fire'
+  | 'next'
+  | 'push'
+  | 'scoreboard';
 
 export function buildIcon(name: IconName): HTMLCanvasElement {
   const p = new Pix(16, 16);
@@ -293,13 +308,47 @@ export function buildIcon(name: IconName): HTMLCanvasElement {
       p.line(3, 3, 12, 12, P.coral).line(4, 3, 13, 12, P.coral).line(12, 3, 3, 12, P.coral).line(13, 3, 4, 12, P.coral);
       break;
     }
-    case 'puck': {
-      p.ellipse(8, 10, 6, 3, P.navy2);
-      p.ellipse(8, 8, 4, 3, P.slate);
-      p.ellipse(8, 8, 1, 1, A);
-      p.vl(4, 2, 7, P.slate3);
-      p.px(4, 2, P.tealLight);
-      p.line(10, 4, 13, 2, P.tealLight).line(11, 6, 14, 5, P.tealLight);
+    case 'drone': {
+      p.rect(1, 6, 3, 6, P.ink).rect(12, 6, 3, 6, P.ink);
+      p.rect(4, 7, 8, 4, P.slate);
+      p.rect(7, 8, 2, 2, A);
+      p.vl(10, 2, 6, P.slate3).px(10, 2, P.tealLight);
+      break;
+    }
+    case 'tag': {
+      // diamond ping marker
+      p.line(8, 2, 13, 7, P.coral).line(13, 7, 8, 12, P.coral).line(8, 12, 3, 7, P.coral).line(3, 7, 8, 2, P.coral);
+      p.line(8, 4, 11, 7, P.coralLight).line(11, 7, 8, 10, P.coralLight).line(8, 10, 5, 7, P.coralLight).line(5, 7, 8, 4, P.coralLight);
+      p.rect(7, 6, 2, 2, C);
+      p.hl(6, 10, 14, A);
+      break;
+    }
+    case 'ads': {
+      // scope reticle
+      p.ring(8, 8, 6, C);
+      p.vl(8, 1, 5, C).vl(8, 11, 15, C).hl(1, 5, 8, C).hl(11, 15, 8, C);
+      p.px(8, 8, P.coral);
+      break;
+    }
+    case 'fire': {
+      // bullet
+      p.rect(6, 5, 4, 9, A).hl(6, 9, 13, P.amberDark);
+      p.rect(6, 3, 4, 2, P.metalLight).px(7, 2, P.metalLight).px(8, 2, P.metalLight);
+      p.vl(6, 5, 12, P.amberLight);
+      break;
+    }
+    case 'next': {
+      p.line(4, 3, 9, 8, C).line(9, 8, 4, 13, C).line(5, 3, 10, 8, C).line(10, 8, 5, 13, C);
+      p.line(8, 3, 13, 8, A).line(13, 8, 8, 13, A);
+      break;
+    }
+    case 'push': {
+      p.line(3, 12, 8, 3, C).line(8, 3, 13, 12, C).line(4, 12, 8, 4, C).line(8, 4, 12, 12, C);
+      p.hl(5, 11, 13, A);
+      break;
+    }
+    case 'scoreboard': {
+      for (const y of [3, 7, 11]) p.rect(2, y, 12, 2, C).rect(2, y, 3, 2, A);
       break;
     }
     case 'sound': {

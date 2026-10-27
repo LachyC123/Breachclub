@@ -19,7 +19,7 @@ export function stepRules(w: World) {
       // recon drones are prep-only: they power down when the action phase starts
       w.entities = w.entities.filter((e) => e.kind !== 'drone');
       w.bumpGeometry();
-      // prep shooting (at the puck) never costs action ammo
+      // prep shooting (at drones) never costs action ammo
       for (const a of w.actors) {
         a.mag = a.weapon.magazine;
         a.reserve = a.weapon.magazine * 3;

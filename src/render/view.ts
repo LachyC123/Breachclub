@@ -9,7 +9,7 @@ import {
   buildCoverSheet,
   buildHingeSheet,
   buildCharge,
-  buildPuck,
+  buildDrone,
   buildMuzzle,
   buildDust,
   buildRing,
@@ -23,7 +23,7 @@ import {
 import type { World } from '../sim/world';
 import type { Actor, SimEvent, Vec, HingeEntity, Obb } from '../sim/types';
 import { raycast, type GeoState, obbCorners } from '../sim/geometry';
-import { canSee, PUCK_VISION } from '../sim/perception';
+import { canSee, DRONE_VISION } from '../sim/perception';
 import { RULES } from '../content/defs';
 
 const VISION = RULES.vision_tiles;
@@ -37,6 +37,24 @@ export interface PreviewState {
   hingePos?: Vec;
   hingeVertical?: boolean;
   hingeValid?: boolean;
+}
+
+export interface RenderOpts {
+  humanId: number;
+  preview: PreviewState;
+  /** camera focus override in world tiles (spectate, drone cam, killer look) */
+  focus: Vec | null;
+  /** drone cam: fog shows only this drone's vision */
+  droneId: number | null;
+  ads: boolean;
+  /** draw the laser sight along this angle from the human's muzzle */
+  laser: number | null;
+}
+
+interface HitMark {
+  pos: Vec;
+  t: number;
+  kill: boolean;
 }
 
 interface ActorView {
@@ -93,8 +111,7 @@ function addCanvas(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement) 
 }
 
 /** Generate every texture once per game (art is authored procedurally at native resolution). */
-export function generateTextures(scene: Phaser.Scene, world: World) {
-  addCanvas(scene, 'map', bakeMap(world.map));
+export function generateTextures(scene: Phaser.Scene) {
   for (const id of Object.keys(LOOKS)) {
     addSheet(scene, `char_${id}`, buildCharacterSheet(id), FRAME_W, FRAME_H);
     addCanvas(scene, `dead_${id}`, buildDeadSprite(id));
@@ -103,8 +120,7 @@ export function generateTextures(scene: Phaser.Scene, world: World) {
   addSheet(scene, 'sled', buildSledSheet(), SLED_SIZE, SLED_SIZE);
   addSheet(scene, 'cover', buildCoverSheet(), COVER_SIZE, COVER_SIZE);
   addSheet(scene, 'hinge', buildHingeSheet(), HINGE_SIZE, HINGE_SIZE);
-  addCanvas(scene, 'puck0', buildPuck(false));
-  addCanvas(scene, 'puck1', buildPuck(true));
+  for (const b of [0, 1]) for (const r of [0, 1]) addCanvas(scene, `drone_${b}_${r}`, buildDrone(!!b, r));
   addCanvas(scene, 'charge0', buildCharge(false));
   addCanvas(scene, 'charge1', buildCharge(true));
   for (let f = 0; f < 3; f++) addCanvas(scene, `muzzle${f}`, buildMuzzle(f));
@@ -146,6 +162,9 @@ export class WorldView {
   reducedFlash = false;
   private polyCache: Vec[][] = [];
   private corpseVisible = new Map<number, boolean>();
+  private hits: HitMark[] = [];
+  private humanId = -1;
+  private zoom = 3;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -157,7 +176,9 @@ export class WorldView {
     this.world = world;
     const s = this.scene;
     const m = world.map;
-    this.base = s.add.image(0, 0, 'map').setOrigin(0).setDepth(DEPTH_FLOOR);
+    const mapKey = `map_${m.id}`;
+    addCanvas(s, mapKey, bakeMap(m));
+    this.base = s.add.image(0, 0, mapKey).setOrigin(0).setDepth(DEPTH_FLOOR);
     for (const pr of buildProps(m)) {
       let key = pr.key;
       let variant = 0;
@@ -165,7 +186,7 @@ export class WorldView {
         variant = Number(pr.key.split('_')[1]);
         key = `washer_${variant}_0`;
       } else if (pr.key === 'console') key = 'console_idle_0';
-      else addCanvas(s, `prop_${pr.key}`, pr.canvas), (key = `prop_${pr.key}`);
+      else addCanvas(s, `prop_${m.id}_${pr.key}`, pr.canvas), (key = `prop_${m.id}_${pr.key}`);
       const img = s.add.image(pr.x, pr.y, key).setOrigin(0, 1).setDepth(100 + pr.depthY);
       this.props.push({ img, key: pr.key, variant });
       if (pr.key === 'console') this.consoleImg = img;
@@ -217,6 +238,7 @@ export class WorldView {
     this.arcs = [];
     this.blockedCells = null;
     this.corpseVisible.clear();
+    this.hits = [];
   }
 
   /** count of live display objects (restart regression check) */
@@ -257,6 +279,11 @@ export class WorldView {
           break;
         }
         case 'damage': {
+          if (e.sourceId === this.humanId && e.sourceId !== e.actorId) {
+            const t = w.actor(e.actorId);
+            if (t) this.hits.push({ pos: { ...t.pos }, t: e.hpAfter <= 0 ? 0.45 : 0.22, kill: e.hpAfter <= 0 });
+            if (this.hits.length > 8) this.hits.shift();
+          }
           const v = this.actors.get(e.actorId);
           if (v && vis(e.actorId)) {
             v.flashUntil = this.time + 0.08;
@@ -298,6 +325,7 @@ export class WorldView {
           }
           break;
         }
+        case 'droneDestroyed':
         case 'sledDestroyed':
         case 'coverDestroyed':
         case 'hingeDestroyed': {
@@ -378,9 +406,11 @@ export class WorldView {
 
   // ---------- per-frame render ----------
 
-  render(alpha: number, dt: number, humanId: number, preview: PreviewState, spectate: Vec | null) {
+  render(alpha: number, dt: number, o: RenderOpts) {
     const w = this.world;
     if (!w) return;
+    const humanId = o.humanId;
+    this.humanId = humanId;
     this.time += dt;
     this.frame++;
     const lerp = (a: Vec, b: Vec): Vec => ({ x: a.x + (b.x - a.x) * alpha, y: a.y + (b.y - a.y) * alpha });
@@ -388,7 +418,7 @@ export class WorldView {
     // dynamic walls from the team's knowledge (unobserved changes stay unknown)
     w.map.softGroups.forEach((g, i) => {
       const st = w.knownSoft[0][i];
-      const key = `soft_${g.id}_${st}`;
+      const key = `soft_${w.map.id}_${g.id}_${st}`;
       if (this.softKeys[i] !== key) {
         const below = Math.floor(g.cells[0] / w.map.w) + 1;
         const ext = below < w.map.h && w.map.roomOf[below * w.map.w + (g.cells[0] % w.map.w)] >= 0 && !w.map.rooms[w.map.roomOf[below * w.map.w + (g.cells[0] % w.map.w)]].interior;
@@ -400,7 +430,7 @@ export class WorldView {
     w.map.doors.forEach((d, i) => {
       const bar = w.barricades[i];
       const known = bar && (bar.team === 0 || w.knownBarricade[0][i]);
-      const key = known ? `bar_${d.id}_${bar!.damaged ? 1 : 0}` : '';
+      const key = known ? `bar_${w.map.id}_${d.id}_${bar!.damaged ? 1 : 0}` : '';
       if (this.barKeys[i] !== key) {
         this.barImgs[i]?.destroy();
         this.barImgs[i] = null;
@@ -443,8 +473,8 @@ export class WorldView {
       const seen = e.team === 0 || w.visibleEntities[0].has(e.id);
       let spr = this.ents.get(e.id) as Phaser.GameObjects.Sprite | undefined;
       if (!spr) {
-        const key = e.kind === 'charge' ? 'charge0' : e.kind === 'puck' ? 'puck0' : e.kind;
-        spr = this.scene.add.sprite(0, 0, key, e.kind === 'charge' || e.kind === 'puck' ? undefined : 0);
+        const key = e.kind === 'charge' ? 'charge0' : e.kind === 'drone' ? 'drone_0_0' : e.kind;
+        spr = this.scene.add.sprite(0, 0, key, e.kind === 'charge' || e.kind === 'drone' ? undefined : 0);
         this.ents.set(e.id, spr);
       }
       spr.setVisible(seen);
@@ -465,8 +495,9 @@ export class WorldView {
         // mirror for angles in the second quadrant
         const a = (((e.angle % Math.PI) + Math.PI) % Math.PI);
         spr.setFlipX(a > Math.PI / 2 + 0.01);
-      } else if (e.kind === 'puck') {
-        spr.setTexture(Math.floor(this.time * 3) % 2 ? 'puck1' : 'puck0').setPosition(e.pos.x * T, e.pos.y * T).setDepth(100 + e.pos.y * T);
+      } else if (e.kind === 'drone') {
+        const roll = Math.floor(e.stepAccum * 6) % 2;
+        spr.setTexture(`drone_${Math.floor(this.time * 3) % 2}_${roll}`).setPosition(Math.round(e.pos.x * T), Math.round(e.pos.y * T)).setDepth(100 + e.pos.y * T);
       } else if (e.kind === 'charge') {
         spr.setTexture(Math.floor(this.time * 8) % 2 ? 'charge1' : 'charge0').setPosition(e.pos.x * T, e.pos.y * T).setDepth(100 + e.pos.y * T);
       }
@@ -478,10 +509,10 @@ export class WorldView {
       }
 
     this.updateFx(dt);
-    if (this.frame % 2 === 0 || this.polyCache.length === 0) this.drawFog();
-    this.drawOverlay(humanId, preview);
+    if (this.frame % 2 === 0 || this.polyCache.length === 0) this.drawFog(o.droneId);
+    this.drawOverlay(humanId, o.preview, o.laser, o.ads);
     this.drawRain(dt);
-    this.updateCamera(humanId, spectate, dt);
+    this.updateCamera(humanId, o.focus, o.ads, dt);
   }
 
   private renderActor(a: Actor, p: Vec, humanId: number) {
@@ -605,10 +636,12 @@ export class WorldView {
     }
     for (const a of this.arcs) a.t -= dt;
     this.arcs = this.arcs.filter((a) => a.t > 0);
+    for (const h of this.hits) h.t -= dt;
+    this.hits = this.hits.filter((h) => h.t > 0);
   }
 
   /** Visibility polygons of the player's living team, cut out of a subdued blueprint fog. */
-  private drawFog() {
+  private drawFog(droneId: number | null) {
     const w = this.world;
     const ctx = this.fogCtx;
     const W = w.map.w * T;
@@ -619,9 +652,11 @@ export class WorldView {
     ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = '#000';
-    const eyes: Array<{ pos: Vec; range: number }> = w.actors.filter((a) => a.team === 0 && a.alive).map((a) => ({ pos: a.pos, range: VISION }));
-    const puck = w.entities.find((e) => e.kind === 'puck' && e.team === 0);
-    if (puck && puck.kind === 'puck') eyes.push({ pos: puck.pos, range: PUCK_VISION });
+    let eyes: Array<{ pos: Vec; range: number }> = w.actors.filter((a) => a.team === 0 && a.alive).map((a) => ({ pos: a.pos, range: VISION }));
+    for (const e of w.entities) if (e.kind === 'drone' && e.team === 0) eyes.push({ pos: e.pos, range: DRONE_VISION });
+    // drone cam: you only see what this drone's camera sees
+    const cam = droneId !== null ? w.entities.find((e) => e.id === droneId) : undefined;
+    if (cam && cam.kind === 'drone') eyes = [{ pos: cam.pos, range: DRONE_VISION }];
     const obs = w.obstacles();
     this.polyCache = [];
     for (const e of eyes) {
@@ -650,11 +685,39 @@ export class WorldView {
     this.fogTex.refresh();
   }
 
-  private drawOverlay(humanId: number, pv: PreviewState) {
+  private drawOverlay(humanId: number, pv: PreviewState, laser: number | null, ads: boolean) {
     const g = this.over;
     const w = this.world;
     g.clear();
     const human = w.actor(humanId);
+    if (human && human.alive && laser !== null && pv.kind === 'none') this.drawLaser(g, human, laser, ads);
+    // drone tags: pinned diamonds over pinged enemies (team knowledge only)
+    for (const [id, m] of w.marks[0]) {
+      const a = w.actor(id);
+      if (!a || !a.alive) continue;
+      const p = w.visible[0].has(id) ? a.pos : m.pos;
+      const x = Math.round(p.x * T);
+      const y = Math.round(p.y * T - 30 - Math.sin(this.time * 6) * 1.5);
+      g.fillStyle(hex(P.coral), 0.95);
+      g.fillTriangle(x, y - 5, x + 4, y, x - 4, y);
+      g.fillTriangle(x, y + 5, x + 4, y, x - 4, y);
+      g.fillStyle(hex(P.cream2), 1).fillRect(x - 1, y - 1, 2, 2);
+      if (!w.visible[0].has(id)) g.lineStyle(1, hex(P.coral), 0.6).strokeCircle(p.x * T, p.y * T, 6);
+    }
+    // hit markers on what the player just hit
+    for (const hm of this.hits) {
+      const x = hm.pos.x * T;
+      const y = hm.pos.y * T - 10;
+      const s = hm.kill ? 5 : 3;
+      g.lineStyle(hm.kill ? 2 : 1, hm.kill ? hex(P.coral) : hex(P.white), Math.min(1, hm.t * 6));
+      for (const [dx, dy] of [
+        [1, 1],
+        [1, -1],
+        [-1, 1],
+        [-1, -1],
+      ])
+        g.lineBetween(x + dx * 2, y + dy * 2, x + dx * (2 + s), y + dy * (2 + s));
+    }
     // objective marker (always known)
     const cc = w.map.console.center;
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 4);
@@ -746,6 +809,41 @@ export class WorldView {
     }
   }
 
+  /** Laser sight from the muzzle to the first thing that blocks sight; coral when it lies on a visible enemy. */
+  private drawLaser(g: Phaser.GameObjects.Graphics, a: Actor, ang: number, ads: boolean) {
+    const w = this.world;
+    const len = weaponLength(a.weapon.id) / T;
+    const from = { x: a.pos.x + Math.cos(ang) * (0.2 + len), y: a.pos.y + Math.sin(ang) * (0.15 + len) };
+    const R = ads ? 12 : Math.min(9, a.weapon.effective_range_tiles * 1.4);
+    const end = { x: from.x + Math.cos(ang) * R, y: from.y + Math.sin(ang) * R };
+    const hit = raycast(w as GeoState, from, end, 'sight', { obs: w.obstacles() });
+    const d = hit ? hit.t * R : R;
+    let onEnemy = false;
+    for (const e of w.actors) {
+      if (e.team === 0 || !e.alive || !w.visible[0].has(e.id)) continue;
+      const rx = e.pos.x - from.x;
+      const ry = e.pos.y - from.y;
+      const along = rx * Math.cos(ang) + ry * Math.sin(ang);
+      const lat = Math.abs(-rx * Math.sin(ang) + ry * Math.cos(ang));
+      if (along > 0 && along < d + 0.3 && lat < 0.42) onEnemy = true;
+    }
+    const col = onEnemy ? hex(P.coral) : hex(P.amberLight);
+    const x0 = from.x * T;
+    const y0 = from.y * T - 9;
+    const x1 = from.x * T + Math.cos(ang) * d * T;
+    const y1 = from.y * T - 9 + Math.sin(ang) * d * T;
+    // dashed beam fading out with distance, bright dot where it lands
+    const steps = Math.max(1, Math.floor((d * T) / 4));
+    for (let i = 0; i < steps; i += 2) {
+      const t0 = i / steps;
+      const t1 = Math.min(1, (i + 1) / steps);
+      g.lineStyle(1, col, (ads ? 0.75 : 0.45) * (1 - t0 * 0.6));
+      g.lineBetween(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1);
+    }
+    g.fillStyle(col, onEnemy ? 1 : 0.8).fillRect(Math.round(x1) - 1, Math.round(y1) - 1, 2, 2);
+    if (ads) g.lineStyle(1, col, 0.7).strokeCircle(x1, y1, onEnemy ? 4 : 3);
+  }
+
   private drawRain(dt: number) {
     const w = this.world;
     const g = this.fx;
@@ -766,17 +864,28 @@ export class WorldView {
     }
   }
 
-  private updateCamera(humanId: number, spectate: Vec | null, dt: number) {
+  /** Integer zoom keeps pixels crisp: about eight and a half tiles of height on any screen. */
+  fit() {
+    const cam = this.scene.cameras.main;
+    this.zoom = Math.max(2, Math.min(8, Math.round(window.innerHeight / 135)));
+    cam.setZoom(this.zoom);
+  }
+
+  private updateCamera(humanId: number, focus: Vec | null, ads: boolean, dt: number) {
     const w = this.world;
     const cam = this.scene.cameras.main;
+    if (cam.zoom !== this.zoom) cam.setZoom(this.zoom);
     const h = w.actor(humanId);
-    let target: Vec = spectate ?? (h ? { x: h.pos.x * T, y: h.pos.y * T } : { x: w.map.console.center.x * T, y: w.map.console.center.y * T });
-    if (!spectate && h) {
-      // lead the camera slightly toward where the player is aiming
-      target = { x: target.x + Math.cos(h.facing) * 18, y: target.y + Math.sin(h.facing) * 12 };
+    const f = focus ?? (h ? h.pos : w.map.console.center);
+    let target: Vec = { x: f.x * T, y: f.y * T - 6 };
+    if (!focus && h && h.alive) {
+      // look ahead where the player aims: further while aiming down sights
+      const viewH = window.innerHeight / this.zoom;
+      const lead = (ads ? 4 : 1.6) * T;
+      target = { x: target.x + Math.cos(h.facing) * lead, y: target.y + Math.sin(h.facing) * Math.min(lead, viewH * 0.3) };
     }
     if (!this.camPos) this.camPos = { ...target };
-    const k = 1 - Math.pow(0.0005, dt);
+    const k = 1 - Math.pow(ads ? 0.004 : 0.0008, dt);
     this.camPos.x += (target.x - this.camPos.x) * k;
     this.camPos.y += (target.y - this.camPos.y) * k;
     let sx = 0;

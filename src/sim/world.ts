@@ -1,5 +1,5 @@
 // Authoritative round simulation. Fixed 60Hz steps; presentation reads state + events only.
-import { RULES, secs, weaponById, weaponForOperator, displayName, SQUADMATES, type Side } from '../content/defs';
+import { RULES, secs, weaponById, weaponForOperator, displayName, SQUADMATES, type Side, type WeaponDef } from '../content/defs';
 import { buildMap, type MapData, type MapId } from './mapdata';
 import { Rng } from './rng';
 import type { GeoState, ObstacleRef } from './geometry';
@@ -51,6 +51,8 @@ export interface RoundConfig {
   mapId?: MapId;
   /** 'range' never ends: targets respawn and walls regenerate */
   mode?: 'match' | 'range';
+  /** the human's chosen primary (loadout); defaults to the operator's weapon */
+  humanWeapon?: WeaponDef['id'];
 }
 
 export interface TeamResources {
@@ -111,6 +113,8 @@ export class World implements GeoState {
   /** drone/ping tags per team: enemy id -> marker */
   marks: [Map<number, TagMark>, Map<number, TagMark>] = [new Map(), new Map()];
   objectiveFound: [boolean, boolean] = [false, false];
+  /** shooting-range reset timers keyed by feature */
+  rangeTimers: Record<string, number> = {};
   private obsCache: { rev: number; tick: number; list: ObstacleRef[] } | null = null;
 
   constructor(cfg: RoundConfig) {
@@ -156,7 +160,8 @@ export class World implements GeoState {
       ops.forEach((opId, i) => {
         const es = entry.spots[i % entry.spots.length];
         const spot: Vec = side === 'attack' ? { x: es[0], y: es[1] } : { ...this.map.defenderSpawns[i % this.map.defenderSpawns.length] };
-        const weapon = weaponById(weaponForOperator(opId));
+        const isHuman = team === 0 && i === this.cfg.humanIndex;
+        const weapon = weaponById(isHuman && this.cfg.humanWeapon ? this.cfg.humanWeapon : weaponForOperator(opId));
         const isSignature = !SQUADMATES.some((s) => s.id === opId);
         const facing = side === 'attack' ? -Math.PI / 2 : Math.PI / 2;
         const a: Actor = {
@@ -190,7 +195,7 @@ export class World implements GeoState {
           gadgetWindupUntil: -1,
           pendingLaunchAngle: null,
           stepAccum: 0,
-          controller: team === 0 && i === this.cfg.humanIndex ? 'human' : 'bot',
+          controller: isHuman ? 'human' : 'bot',
           shove: { x: 0, y: 0 },
           lastDamagedTick: -1000,
           lastDamagedBy: -1,

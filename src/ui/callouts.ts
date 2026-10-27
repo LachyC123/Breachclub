@@ -122,7 +122,7 @@ export class Callouts {
           const target = w.actor(e.actorId);
           if (!target) break;
           if (e.team === 0 && e.spotterId < 0) {
-            if (this.ready('puckspot', 3, 0.5)) this.show('PUCK', `Defender spotted — ${room(target.pos)}`, 'system');
+            if (this.ready('dronespot', 3, 0.5)) this.show('DRONE', `Defender spotted — ${room(target.pos)}`, 'system');
           } else if (e.team === 0) say(e.spotterId, 'spot', { room: room(target.pos) }, 6);
           else say(e.spotterId, 'spot', {}, 6);
           break;

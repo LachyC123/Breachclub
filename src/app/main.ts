@@ -1,6 +1,9 @@
 // fonts are bundled locally (SIL Open Font License) — no external font service
-import '@fontsource/pixelify-sans/latin-500.css';
-import '@fontsource/pixelify-sans/latin-700.css';
+import '@fontsource/barlow-condensed/latin-500.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/barlow-condensed/latin-700.css';
+import '@fontsource/barlow-condensed/latin-800.css';
+import '@fontsource/barlow-condensed/latin-800-italic.css';
 import '@fontsource/inter/latin-500.css';
 import '@fontsource/inter/latin-700.css';
 import '@fontsource/inter/latin-800.css';

@@ -122,6 +122,23 @@ export const LOOKS: Record<string, Look> = {
     pack: 'none',
     scarf: P.cream,
   },
+  // shooting-range target: a padded canvas mannequin with a painted bullseye (original art)
+  dummy: {
+    skin: P.tan,
+    skinShade: P.brown,
+    hair: P.creamDark,
+    hairShade: P.tan,
+    hairStyle: 'beanie',
+    hat: P.coral,
+    top: P.cream,
+    topShade: P.creamDark,
+    topLight: P.cream2,
+    under: P.coral,
+    pants: P.slate,
+    pantsShade: P.navy2,
+    shoes: P.ink,
+    pack: 'none',
+  },
 };
 
 /** facing index: 0=E 1=SE 2=S 3=SW 4=W 5=NW 6=N 7=NE */

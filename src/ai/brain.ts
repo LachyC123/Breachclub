@@ -187,6 +187,17 @@ export class AIDirector {
         b.task = postPlantTask(w, b.slot);
         return;
       }
+      // don't lose on time standing next to the console: the closest escort arms it when the
+      // clock runs low or the player is far from site
+      const c = w.map.console.center;
+      if (h && dist(a.pos, c) < 6 && (w.secondsLeft() < 35 || dist(h.pos, c) > 9)) {
+        const nearest = w.actors.filter((x) => x.team === a.team && x.alive && x.controller === 'bot').sort((x, y) => dist(x.pos, c) - dist(y.pos, c))[0];
+        if (nearest?.id === a.id) {
+          b.task = { kind: 'arm' };
+          b.status = 'Arming';
+          return;
+        }
+      }
       b.task = { kind: 'escort' };
       return;
     }
@@ -231,11 +242,12 @@ export class AIDirector {
     const cps = isFlank ? plan.flank! : plan.checkpoints;
     if (stage >= cps.length - 1) {
       // on site: one planter (the closest), everyone else covers an entrance
-      const living = w.actors.filter((x) => x.team === team && x.alive && x.controller === 'bot');
+      // (the actor being thought for counts even when human: the dev autopilot drives the player)
+      const living = w.actors.filter((x) => x.team === team && x.alive && (x.controller === 'bot' || x.id === a.id));
       const c = w.map.console.center;
       let planter = w.actor(plan.planterId);
       const closest = living.sort((x, y) => dist(x.pos, c) - dist(y.pos, c))[0];
-      if (!planter || !planter.alive || planter.controller !== 'bot' || (closest && dist(closest.pos, c) + 3 < dist(planter.pos, c))) {
+      if (!planter || !planter.alive || !living.includes(planter) || (closest && dist(closest.pos, c) + 3 < dist(planter.pos, c))) {
         planter = closest;
         plan.planterId = planter?.id ?? -1;
       }

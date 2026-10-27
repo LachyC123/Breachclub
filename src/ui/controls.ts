@@ -80,6 +80,11 @@ export class Controls {
     on(window, 'orientationchange', () => this.reset());
   }
 
+  /** last mouse position in screen pixels (desktop) */
+  get mouseScreen(): Vec {
+    return { x: this.mouse.x, y: this.mouse.y };
+  }
+
   dispose() {
     for (const d of this.disposers) d();
     this.disposers = [];

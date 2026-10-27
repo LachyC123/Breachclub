@@ -150,7 +150,7 @@ import { Match } from '../src/app/session';
 
 describe('match flow', () => {
   it('stepping after a round ends exposes no stale events and scores once', () => {
-    const m = new Match({ seed: 3, difficulty: 'club', playerStartSide: 'attack', attackOperator: 'ram', defenceOperator: 'hinge', attackEntry: 'front', prepSeconds: 0, actionSeconds: 1 });
+    const m = new Match({ seed: 3, difficulty: 'club', playerStartSide: 'attack', winsNeeded: 3, prepSeconds: 0, actionSeconds: 1 });
     let ended = 0;
     for (let i = 0; i < 60 * 4; i++) {
       if (m.step(null)) ended++;
