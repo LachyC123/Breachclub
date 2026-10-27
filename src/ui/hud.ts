@@ -5,6 +5,8 @@ import { h, iconImg, icon, portrait } from './dom';
 import type { IconName } from '../render/art/gadgets';
 import type { World } from '../sim/world';
 import type { InteractOption, TeamId } from '../sim/types';
+import type { TeamCards } from '../content/cards';
+import { cardStrip } from './draft';
 
 export interface GadgetUi {
   icon: IconName;
@@ -41,6 +43,9 @@ export interface HudState {
   drone: DroneUi | null;
   /** shooting range: hide round clock and score */
   range?: boolean;
+  /** wild cards held (own, enemy) and the player's team's active-card charges */
+  cards?: [TeamCards, TeamCards];
+  charges?: { turret: number; missile: number };
 }
 
 const WEAPON_NAME: Record<string, string> = { smg: 'POCKET SMG', carbine: 'CARBINE', scattergun: 'SCATTERGUN' };
@@ -80,6 +85,10 @@ export class Hud {
   interactBtn: HTMLElement;
   tagBtn: HTMLElement;
   slideBtn: HTMLElement;
+  turretBtn: HTMLElement;
+  missileBtn: HTMLElement;
+  private ownCards: HTMLElement;
+  private foeCards: HTMLElement;
   nextBtn: HTMLElement;
   pauseBtn: HTMLElement;
   boardBtn: HTMLElement;
@@ -172,9 +181,13 @@ export class Hud {
     this.interactBtn = act('interact', 'arm', 'INTERACT', [this.interactRing.svg]);
     this.tagBtn = act('tag', 'tag', 'TAG', [this.tagRing.svg]);
     this.slideBtn = act('slide', 'slide', 'SLIDE');
+    this.turretBtn = act('card turret hidden', 'card_turret', 'TURRET', [h('em')]);
+    this.missileBtn = act('card missile hidden', 'card_missile', 'MISSILE', [h('em')]);
+    this.ownCards = h('div', { class: 'wc-strip hud-own' });
+    this.foeCards = h('div', { class: 'wc-strip hud-foe' });
     this.nextBtn = act('next', 'next', 'NEXT CAM');
     this.ammo = h('div', { class: 'ammo' });
-    this.cluster = h('div', { class: 'cluster' }, this.slideBtn, this.interactBtn, this.gadgetBtn, this.reloadBtn, this.adsBtn, this.fireBtn, this.tagBtn, this.nextBtn, this.ammo);
+    this.cluster = h('div', { class: 'cluster' }, this.turretBtn, this.missileBtn, this.slideBtn, this.interactBtn, this.gadgetBtn, this.reloadBtn, this.adsBtn, this.fireBtn, this.tagBtn, this.nextBtn, this.ammo);
 
     // ---- overlays ----
     this.vignette = h('div', { class: 'lowhp-vignette' });
@@ -191,7 +204,7 @@ export class Hud {
     this.ptsEl = h('div', { class: 'pts-chip' }, '0 PTS');
     this.announceEl = h('div', { class: 'announcer' });
 
-    this.root.append(this.touch, this.droneCam, this.hurtEl, this.popEl, this.comboEl, this.ptsEl, this.announceEl, this.vignette, this.dmg, this.moveStick, this.aimStick, top, sys, this.feed, this.vitals, this.cluster, this.toastEl, this.cancelZone, this.hintEl, this.elimEl);
+    this.root.append(this.touch, this.ownCards, this.foeCards, this.droneCam, this.hurtEl, this.popEl, this.comboEl, this.ptsEl, this.announceEl, this.vignette, this.dmg, this.moveStick, this.aimStick, top, sys, this.feed, this.vitals, this.cluster, this.toastEl, this.cancelZone, this.hintEl, this.elimEl);
     parent.appendChild(this.root);
     this.setMode('play');
   }
@@ -432,6 +445,25 @@ export class Hud {
       for (let i = 0; i < g.pipsMax; i++) pips.appendChild(h('i', { class: i < g.pips ? '' : 'used' }));
       this.gadgetBtn.classList.toggle('disabled', !g.enabled);
       this.gadgetRing.c.setAttribute('stroke-dashoffset', String(this.gadgetRing.len * (1 - g.cooldown)));
+    });
+
+    // ---- wild cards ----
+    const ck = s.cards ? JSON.stringify(s.cards) : '';
+    this.set('cards', ck, () => {
+      this.ownCards.replaceChildren(...(s.cards ? cardStrip(s.cards[0]).childNodes : []));
+      this.foeCards.replaceChildren(...(s.cards ? cardStrip(s.cards[1]).childNodes : []));
+    });
+    const chk = s.charges ? `${s.charges.turret}|${s.charges.missile}|${w.phase}` : '';
+    this.set('charges', chk, () => {
+      const live = w.phase === 'action' || w.phase === 'armed';
+      for (const [btn, n, held] of [
+        [this.turretBtn, s.charges?.turret ?? 0, (s.cards?.[0].turret ?? 0) > 0],
+        [this.missileBtn, s.charges?.missile ?? 0, (s.cards?.[0].missile ?? 0) > 0],
+      ] as Array<[HTMLElement, number, boolean]>) {
+        btn.classList.toggle('hidden', !held);
+        btn.classList.toggle('disabled', n <= 0 || !live);
+        (btn.querySelector('em') as HTMLElement).textContent = String(n);
+      }
     });
 
     // ---- drone cam ----

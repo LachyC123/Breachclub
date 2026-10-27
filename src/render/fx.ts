@@ -54,6 +54,7 @@ interface Ring {
 
 // 3x5 pixel digits for floating damage numbers (rows top to bottom, 3 bits each)
 const DIGITS: Record<string, number[]> = {
+  '+': [0, 2, 7, 2, 0],
   '0': [7, 5, 5, 5, 7],
   '1': [2, 6, 2, 2, 7],
   '2': [7, 1, 7, 4, 7],
@@ -72,6 +73,7 @@ interface FloatNum {
   text: string;
   t: number;
   big: boolean;
+  col: string;
 }
 
 const DEPTH_DECAL = 2;
@@ -179,9 +181,9 @@ export class Fx {
   }
 
   /** Floating damage number above a target (big and red on a kill). */
-  number(p: Vec, n: number, big: boolean) {
+  number(p: Vec, n: number, big: boolean, col: string = big ? P.coral : P.white, prefix = '') {
     if (this.nums.length > 16) this.nums.shift();
-    this.nums.push({ x: p.x * T + (Math.random() - 0.5) * 6, y: p.y * T - 22, text: String(Math.max(1, Math.round(n))), t: 0, big });
+    this.nums.push({ x: p.x * T + (Math.random() - 0.5) * 6, y: p.y * T - 22, text: prefix + String(Math.max(1, Math.round(n))), t: 0, big, col });
   }
 
   private drawNumber(n: FloatNum) {
@@ -203,7 +205,7 @@ export class Fx {
           if (!(rows[r] & (4 >> c))) continue;
           // dark outline under each lit pixel keeps it readable on any floor
           g.fillStyle(hex(P.ink), alpha).fillRect(x + c * sc + 1, y + r * sc + 1, sc, sc);
-          g.fillStyle(n.big ? hex(P.coral) : hex(P.white), alpha).fillRect(x + c * sc, y + r * sc, sc, sc);
+          g.fillStyle(hex(n.col), alpha).fillRect(x + c * sc, y + r * sc, sc, sc);
         }
       x += 4 * sc;
     }

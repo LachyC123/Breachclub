@@ -18,6 +18,7 @@ import { advancePlan, breacherFor, buildAttackPlan, driveDrone, escortGoal, plan
 import { DefenceBrain } from './defence';
 import { dangerField, nextPortalAlong } from './tactics';
 import { aiDriven, playerDriven, setAutopilot } from './control';
+import { MISSILE_RADIUS, MISSILE_RANGE } from '../sim/cards';
 
 export type { Order, BotStatus } from './types';
 export { DIFFICULTY } from './types';
@@ -161,7 +162,33 @@ export class AIDirector {
       intent.gadget = { type: 'hingeRotate' };
       b.wantRotate = false;
     }
+    if (!intent.card && w.tick % 15 === a.id % 15) intent.card = this.cardUse(a, b, p);
     return intent;
+  }
+
+  private lastMissile: [number, number] = [-9999, -9999];
+
+  /** Active wild cards: bots on the player's squad leave them to the player while they live. */
+  private cardUse(a: Actor, b: BotState, p: Perception): ActorIntent['card'] {
+    const w = this.w;
+    if (w.phase !== 'action' && w.phase !== 'armed') return null;
+    if (a.team === 0 && this.human()) return null;
+    const ch = w.cardCharges[a.team];
+    if (ch.turret > 0 && !w.entities.some((e) => e.kind === 'turret' && e.ownerId === a.id)) {
+      // drop it where you're holding or stacking, facing the angle you're watching
+      const settled = b.status === 'Holding' || b.status === 'Stacked' || (w.phase === 'armed' && b.task.kind === 'hold');
+      if (settled) return { type: 'turret' };
+    }
+    if (ch.missile > 0 && w.tick - this.lastMissile[a.team] > secs(8)) {
+      const allies = w.actors.filter((x) => x.alive && x.team === a.team);
+      const fresh = p.memories.filter((m) => w.tick - m.tick < secs(2.5) && dist(m.pos, a.pos) <= MISSILE_RANGE && dist(m.pos, a.pos) > 3.5);
+      for (const m of fresh) {
+        if (allies.some((x) => dist(x.pos, m.pos) < MISSILE_RADIUS + 1)) continue;
+        this.lastMissile[a.team] = w.tick;
+        return { type: 'missile', x: m.pos.x, y: m.pos.y };
+      }
+    }
+    return null;
   }
 
   private decide(a: Actor, b: BotState, p: Perception) {

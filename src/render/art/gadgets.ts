@@ -151,6 +151,17 @@ export function buildBarrel(lit: boolean): HTMLCanvasElement {
   return p.c;
 }
 
+/** Sentry turret base (the gun barrel is drawn as a rotating overlay line). */
+export function buildTurret(team: 0 | 1): HTMLCanvasElement {
+  const p = new Pix(14, 14);
+  const accent = team === 0 ? P.teal : P.coral;
+  p.line(2, 13, 5, 8, P.slate3).line(11, 13, 8, 8, P.slate3).vl(7, 8, 13, P.slate3);
+  p.ellipse(7, 7, 4, 3, P.slate2).ellipse(7, 6, 3, 2, P.slate).rect(5, 5, 5, 1, accent);
+  p.px(7, 6, P.coralLight);
+  p.outline(P.outline);
+  return p.c;
+}
+
 export function buildMuzzle(frame: number): HTMLCanvasElement {
   const p = new Pix(9, 9);
   const c = 4;
@@ -227,7 +238,19 @@ export type IconName =
   | 'next'
   | 'push'
   | 'scoreboard'
-  | 'slide';
+  | 'slide'
+  | 'card_adrenaline'
+  | 'card_hollow'
+  | 'card_kevlar'
+  | 'card_quickdraw'
+  | 'card_vampire'
+  | 'card_ghost'
+  | 'card_pulse'
+  | 'card_poison'
+  | 'card_explosive'
+  | 'card_aimbot'
+  | 'card_turret'
+  | 'card_missile';
 
 export function buildIcon(name: IconName): HTMLCanvasElement {
   const p = new Pix(16, 16);
@@ -368,6 +391,78 @@ export function buildIcon(name: IconName): HTMLCanvasElement {
     case 'push': {
       p.line(3, 12, 8, 3, C).line(8, 3, 13, 12, C).line(4, 12, 8, 4, C).line(8, 4, 12, 12, C);
       p.hl(5, 11, 13, A);
+      break;
+    }
+    case 'card_adrenaline': {
+      // lightning bolt
+      p.line(10, 1, 5, 8, A).line(11, 1, 6, 8, A).hl(5, 11, 8, A).line(10, 8, 5, 15, A).line(11, 8, 6, 15, A);
+      p.px(9, 3, P.amberLight).px(8, 11, P.amberLight);
+      break;
+    }
+    case 'card_hollow': {
+      // big round with a hollow tip
+      p.rect(6, 6, 4, 8, A).rect(6, 3, 4, 3, P.metalLight).px(7, 2, P.metalLight).px(8, 2, P.metalLight);
+      p.px(7, 3, P.ink).px(8, 3, P.ink).vl(6, 6, 13, P.amberLight).hl(6, 9, 13, P.amberDark);
+      break;
+    }
+    case 'card_kevlar': {
+      // shield
+      p.rect(3, 2, 10, 7, P.slate2).rect(4, 9, 8, 2, P.slate2).rect(5, 11, 6, 2, P.slate2).rect(7, 13, 2, 2, P.slate2);
+      p.vl(8, 3, 12, C).hl(4, 12, 6, C).hl(4, 12, 2, P.slate3);
+      break;
+    }
+    case 'card_quickdraw': {
+      // magazine + speed arrow
+      p.rect(7, 3, 5, 10, P.slate2).rect(8, 4, 3, 2, A).rect(8, 7, 3, 2, A).rect(8, 10, 3, 2, A);
+      p.hl(1, 5, 6, C).hl(2, 5, 8, C).hl(1, 5, 10, C);
+      break;
+    }
+    case 'card_vampire': {
+      // fangs dripping
+      p.rect(2, 3, 12, 3, P.coralDeep).hl(2, 13, 3, P.coral);
+      p.line(4, 6, 6, 11, C).line(5, 6, 6, 10, C).line(11, 6, 10, 11, C).line(12, 6, 10, 10, C);
+      p.px(6, 13, P.coral).px(10, 13, P.coral).px(6, 14, P.coralDeep);
+      break;
+    }
+    case 'card_ghost': {
+      p.rect(4, 4, 8, 9, C).rect(5, 3, 6, 1, C).hl(4, 4, 13, C).px(6, 14, C).px(9, 14, C).px(11, 13, C);
+      p.px(6, 7, P.ink).px(9, 7, P.ink).hl(6, 9, 10, P.slate3);
+      break;
+    }
+    case 'card_pulse': {
+      p.ring(8, 8, 6, P.tealLight).ring(8, 8, 3, P.tealLight);
+      p.rect(7, 7, 2, 2, C).px(12, 4, P.coral).px(4, 11, P.coral);
+      break;
+    }
+    case 'card_poison': {
+      // drop with a skull-ish face
+      p.line(8, 1, 3, 9, P.green).line(8, 1, 13, 9, P.green).rect(3, 9, 11, 3, P.green).rect(4, 12, 9, 2, P.green).rect(6, 14, 5, 1, P.green);
+      p.rect(5, 6, 7, 6, P.mint);
+      p.px(6, 9, P.ink).px(10, 9, P.ink).hl(7, 9, 11, P.greenDark);
+      break;
+    }
+    case 'card_explosive': {
+      // starburst
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        p.line(8, 8, 8 + Math.cos(a) * 7, 8 + Math.sin(a) * 7, i % 2 ? A : P.coral);
+      }
+      p.ellipse(8, 8, 3, 3, P.yellow).px(8, 8, C);
+      break;
+    }
+    case 'card_aimbot': {
+      p.ring(8, 8, 6, P.coral).ring(8, 8, 3, P.coral);
+      p.vl(8, 0, 4, C).vl(8, 12, 15, C).hl(0, 4, 8, C).hl(12, 15, 8, C).rect(7, 7, 2, 2, P.coralLight);
+      break;
+    }
+    case 'card_turret': {
+      p.line(4, 15, 7, 10, P.slate3).line(12, 15, 9, 10, P.slate3).vl(8, 10, 15, P.slate3);
+      p.rect(4, 6, 8, 5, P.slate2).hl(4, 11, 6, P.slate3).rect(11, 7, 5, 2, P.metalLight).px(6, 8, P.coral);
+      break;
+    }
+    case 'card_missile': {
+      p.line(3, 13, 11, 5, P.metalLight).line(4, 13, 12, 5, P.metalLight).line(3, 12, 11, 4, P.slate3);
+      p.rect(11, 2, 3, 3, P.coral).px(4, 10, A).px(2, 14, P.amberLight).px(1, 15, P.amber).px(3, 14, A);
       break;
     }
     case 'slide': {

@@ -11,6 +11,7 @@ import {
   buildCharge,
   buildDrone,
   buildBarrel,
+  buildTurret,
   buildMuzzle,
   buildDust,
   buildRing,
@@ -28,11 +29,13 @@ import { canSee, DRONE_VISION } from '../sim/perception';
 import { RULES } from '../content/defs';
 import { statsOf } from '../content/handling';
 import { Fx, buildLightTexture } from './fx';
+import { MISSILE_RADIUS, MISSILE_WARNING, TURRET_HP, TURRET_RANGE } from '../sim/cards';
 
 const VISION = RULES.vision_tiles;
 
 export interface PreviewState {
-  kind: 'none' | 'sled' | 'hinge';
+  kind: 'none' | 'sled' | 'hinge' | 'missile';
+  missilePos?: Vec;
   sledPoints?: Vec[];
   sledBreach?: Vec | null;
   sledStop?: Vec;
@@ -143,6 +146,8 @@ export function generateTextures(scene: Phaser.Scene) {
   addCanvas(scene, 'fxlight', buildLightTexture());
   addCanvas(scene, 'barrel0', buildBarrel(false));
   addCanvas(scene, 'barrel1', buildBarrel(true));
+  addCanvas(scene, 'turret_own', buildTurret(0));
+  addCanvas(scene, 'turret_foe', buildTurret(1));
   for (let f = 0; f < 4; f++) addCanvas(scene, `dust${f}`, buildDust(f));
   for (const k of ['player', 'ally', 'enemy', 'ghost'] as const) addCanvas(scene, `ring_${k}`, buildRing(k));
   for (const s of ['idle', 'arming', 'armed'] as const) for (const b of [0, 1]) addCanvas(scene, `console_${s}_${b}`, consoleSprite(s, b).c);
@@ -187,7 +192,7 @@ export class WorldView {
   private juice: Fx;
   private kick = { x: 0, y: 0 };
   private shotThisTick = new Set<number>();
-  private dmgThisTick = new Map<number, { amt: number; kill: boolean; pos: Vec }>();
+  private dmgThisTick = new Map<number, { amt: number; kill: boolean; pos: Vec; dot: boolean }>();
   /** slow-motion close-up on the round's final kill */
   private killcam: { pos: Vec; t: number } | null = null;
   /** wider view while aiming down sights */
@@ -330,11 +335,11 @@ export class WorldView {
         case 'damage': {
           if (e.sourceId === this.humanId && e.sourceId !== e.actorId) {
             const t = w.actor(e.actorId);
-            if (t) this.hits.push({ pos: { ...t.pos }, t: e.hpAfter <= 0 ? 0.45 : 0.22, kill: e.hpAfter <= 0 });
+            if (t && !e.dot) this.hits.push({ pos: { ...t.pos }, t: e.hpAfter <= 0 ? 0.45 : 0.22, kill: e.hpAfter <= 0 });
             if (this.hits.length > 8) this.hits.shift();
             // one number per target per tick (a scattergun blast is five pellets)
             if (t) {
-              const d = this.dmgThisTick.get(t.id) ?? { amt: 0, kill: false, pos: { ...t.pos } };
+              const d = this.dmgThisTick.get(t.id) ?? { amt: 0, kill: false, pos: { ...t.pos }, dot: !!e.dot };
               d.amt += e.amount;
               d.kill = d.kill || e.hpAfter <= 0;
               this.dmgThisTick.set(t.id, d);
@@ -400,6 +405,43 @@ export class WorldView {
             this.dust(e.pos);
             this.juice.sparks(e.pos, 10, P.yellow, 110);
             this.juice.smoke(e.pos, 3, 1.5, null, P.slate3);
+          }
+          break;
+        }
+        case 'turretDeployed': {
+          const t = w.entities.find((x) => x.id === e.turretId);
+          if (t && t.kind === 'turret' && (t.team === 0 || w.visibleEntities[0].has(t.id))) {
+            this.burst(t.pos, 10, P.amberLight, 50, 0.35);
+            this.juice.shockwave(t.pos, 0.9, '#c79bff');
+          }
+          break;
+        }
+        case 'turretShot': {
+          const t = w.entities.find((x) => x.id === e.turretId);
+          if (!t || (t.team !== 0 && !w.visibleEntities[0].has(t.id))) break;
+          this.tracers.push({ a: e.from, b: e.to, t: 0.06, max: 0.06, col: t.team === 0 ? hex(P.tealLight) : hex(P.coralLight), w: 1, head: 6 });
+          this.juice.muzzleLight(e.from, 0.6);
+          if (t.kind === 'turret' && Math.random() < 0.5) this.juice.casing(t.pos, Math.atan2(e.to.y - e.from.y, e.to.x - e.from.x), false);
+          break;
+        }
+        case 'turretDestroyed':
+        case 'turretExpired': {
+          {
+            this.juice.sparks(e.pos, e.type === 'turretDestroyed' ? 14 : 5, P.yellow, 110);
+            this.juice.smoke(e.pos, e.type === 'turretDestroyed' ? 4 : 2, 1.4, null, P.slate3);
+          }
+          break;
+        }
+        case 'pulse': {
+          // sonar rings out from each of the pulsing team's operators you can see
+          for (const a of w.actors) if (a.alive && a.team === e.team && (a.team === 0 || w.visible[0].has(a.id))) this.juice.shockwave(a.pos, 6, e.team === 0 ? P.tealLight : P.coral);
+          break;
+        }
+        case 'healed': {
+          const a = w.actor(e.actorId);
+          if (a && (a.team === 0 || w.visible[0].has(a.id))) {
+            this.juice.number(a.pos, e.amount, false, P.mint, '+');
+            this.burst(a.pos, 8, P.mint, 40, 0.5);
           }
           break;
         }
@@ -595,11 +637,11 @@ export class WorldView {
     const live = new Set<number>();
     for (const e of w.entities) {
       live.add(e.id);
-      const seen = e.kind === 'barrel' || e.team === 0 || w.visibleEntities[0].has(e.id);
+      const seen = e.kind === 'barrel' || e.kind === 'missile' || e.team === 0 || w.visibleEntities[0].has(e.id);
       let spr = this.ents.get(e.id) as Phaser.GameObjects.Sprite | undefined;
       if (!spr) {
-        const key = e.kind === 'charge' ? 'charge0' : e.kind === 'drone' ? 'drone_0_0' : e.kind === 'barrel' ? 'barrel0' : e.kind;
-        spr = this.scene.add.sprite(0, 0, key, e.kind === 'charge' || e.kind === 'drone' || e.kind === 'barrel' ? undefined : 0);
+        const key = e.kind === 'charge' ? 'charge0' : e.kind === 'drone' ? 'drone_0_0' : e.kind === 'barrel' ? 'barrel0' : e.kind === 'turret' ? (e.team === 0 ? 'turret_own' : 'turret_foe') : e.kind === 'missile' ? 'fxlight' : e.kind;
+        spr = this.scene.add.sprite(0, 0, key, e.kind === 'charge' || e.kind === 'drone' || e.kind === 'barrel' || e.kind === 'turret' || e.kind === 'missile' ? undefined : 0);
         this.ents.set(e.id, spr);
       }
       spr.setVisible(seen);
@@ -620,6 +662,11 @@ export class WorldView {
         // mirror for angles in the second quadrant
         const a = (((e.angle % Math.PI) + Math.PI) % Math.PI);
         spr.setFlipX(a > Math.PI / 2 + 0.01);
+      } else if (e.kind === 'turret') {
+        const expiring = e.expiresTick - w.tick < 180 && Math.floor(this.time * 8) % 2 === 0;
+        spr.setOrigin(0.5, 0.7).setPosition(Math.round(e.pos.x * T), Math.round(e.pos.y * T)).setDepth(100 + e.pos.y * T).setAlpha(expiring ? 0.5 : 1);
+      } else if (e.kind === 'missile') {
+        spr.setVisible(false);
       } else if (e.kind === 'barrel') {
         // cooking off: flashes faster and faster, jitters
         const lit = e.fuseTick >= 0 && Math.floor(this.time * 18) % 2 === 0;
@@ -641,7 +688,7 @@ export class WorldView {
 
     this.updateFx(this.killcam ? dt * 0.3 : dt);
     this.ejectShells();
-    for (const [, d] of this.dmgThisTick) this.juice.number(d.pos, d.amt, d.kill);
+    for (const [, d] of this.dmgThisTick) this.juice.number(d.pos, d.amt, d.kill, d.kill ? P.coral : d.dot ? P.mint : P.white);
     this.dmgThisTick.clear();
     if (this.killcam) {
       this.killcam.t -= dt;
@@ -735,6 +782,8 @@ export class WorldView {
     const behind = Math.sin(a.facing) < -0.3;
     v.gun.setFrame(weaponFrame(a.facing)).setPosition(Math.round(gx), Math.round(gy)).setDepth(100 + py + (behind ? -0.5 : 0.5));
     v.gun.setVisible(!a.interaction || a.interaction.kind === 'vault' ? !a.vaulting : true);
+    // poisoned: green tint flicker and bubbles
+    if (a.poison && this.frame % 6 === 0) this.juice.smoke({ x: a.pos.x, y: a.pos.y - 0.6 }, 1, 0.5, -Math.PI / 2, P.mint);
     if (this.time < v.flashUntil) {
       v.body.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
     } else v.body.clearTint();
@@ -917,6 +966,51 @@ export class WorldView {
         } else {
           g.lineStyle(2, hex(P.amberLight), 0.8).strokeCircle(s.x * T, s.y * T, 4);
         }
+      }
+    }
+    if (pv.kind === 'missile' && pv.missilePos && human) {
+      const p = pv.missilePos;
+      const r = MISSILE_RADIUS * T;
+      // dashed line from you to the strike point, then the blast circle
+      const steps = Math.floor(Math.hypot(p.x - human.pos.x, p.y - human.pos.y) * 2);
+      for (let i = 0; i < steps; i += 2) {
+        const t0 = i / steps;
+        const t1 = (i + 1) / steps;
+        g.lineStyle(1, hex(P.coralLight), 0.7).lineBetween((human.pos.x + (p.x - human.pos.x) * t0) * T, (human.pos.y + (p.y - human.pos.y) * t0) * T, (human.pos.x + (p.x - human.pos.x) * t1) * T, (human.pos.y + (p.y - human.pos.y) * t1) * T);
+      }
+      g.fillStyle(hex(P.coral), 0.18).fillCircle(p.x * T, p.y * T, r);
+      g.lineStyle(2, hex(P.coral), 0.9).strokeCircle(p.x * T, p.y * T, r);
+      g.lineStyle(1, hex(P.white), 0.9).lineBetween(p.x * T - 5, p.y * T, p.x * T + 5, p.y * T).lineBetween(p.x * T, p.y * T - 5, p.x * T, p.y * T + 5);
+    }
+    // incoming missiles: everyone sees the danger zone fill up
+    for (const e of w.entities) {
+      if (e.kind !== 'missile') continue;
+      const total = MISSILE_WARNING * 60;
+      const k = Math.max(0, Math.min(1, 1 - (e.impactTick - w.tick) / total));
+      const r = MISSILE_RADIUS * T;
+      const blink = Math.floor(this.time * (6 + k * 14)) % 2 === 0;
+      g.fillStyle(hex(P.coral), 0.12 + k * 0.2).fillCircle(e.pos.x * T, e.pos.y * T, r * k);
+      g.lineStyle(2, hex(blink ? P.white : P.coral), 0.95).strokeCircle(e.pos.x * T, e.pos.y * T, r);
+      g.lineStyle(1, hex(P.coral), 0.8).lineBetween(e.pos.x * T - r, e.pos.y * T, e.pos.x * T + r, e.pos.y * T).lineBetween(e.pos.x * T, e.pos.y * T - r, e.pos.x * T, e.pos.y * T + r);
+      if (k > 0.82) {
+        // the missile streaks in from the sky
+        const f = (k - 0.82) / 0.18;
+        const sx = e.pos.x * T - 60 * (1 - f);
+        const sy = e.pos.y * T - 140 * (1 - f);
+        g.lineStyle(3, hex(P.amberLight), 1).lineBetween(sx, sy, sx - 10, sy - 22);
+        g.fillStyle(hex(P.white), 1).fillCircle(sx, sy, 2);
+      }
+    }
+    // turrets: barrel line, own turret's reach, blink before expiring
+    for (const e of w.entities) {
+      if (e.kind !== 'turret' || (e.team !== 0 && !w.visibleEntities[0].has(e.id))) continue;
+      const x = e.pos.x * T;
+      const y = e.pos.y * T - 6;
+      g.lineStyle(2, hex(P.metalLight), 1).lineBetween(x, y, x + Math.cos(e.facing) * 8, y + Math.sin(e.facing) * 8);
+      if (e.team === 0) g.lineStyle(1, hex(P.tealLight), 0.18).strokeCircle(e.pos.x * T, e.pos.y * T, TURRET_RANGE * T);
+      if (e.hp < TURRET_HP) {
+        g.fillStyle(hex(P.ink), 0.85).fillRect(x - 7, y - 12, 14, 3);
+        g.fillStyle(e.team === 0 ? hex(P.tealLight) : hex(P.coral), 1).fillRect(x - 6, y - 11, Math.round((12 * e.hp) / TURRET_HP), 1);
       }
     }
     if (pv.kind === 'hinge' && pv.hingePos) {

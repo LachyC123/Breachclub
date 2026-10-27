@@ -6,6 +6,7 @@ import { canSee } from '../sim/perception';
 import { canShoot } from '../sim/combat';
 import type { Actor, ActorIntent, BarrelEntity, DroneEntity, Vec } from '../sim/types';
 import { BARREL_RADIUS } from '../sim/explosions';
+import { lvl } from '../content/cards';
 import type { World } from '../sim/world';
 import type { BotState, DiffParams, Perception } from './types';
 import { coverFrom, followPath } from './locomotion';
@@ -39,11 +40,14 @@ export interface EngageOpts {
   hold: boolean;
 }
 
-export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff: DiffParams, intent: ActorIntent, opts: EngageOpts): boolean {
+export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff0: DiffParams, intent: ActorIntent, opts: EngageOpts): boolean {
+  // Aimbot card: the same sight rules, much steadier hands
+  const ab = lvl(w.cards[a.team], 'aimbot');
+  const diff = ab ? { ...diff0, settle: diff0.settle * [1, 0.6, 0.45, 0.3][ab], aimBase: diff0.aimBase * [1, 0.7, 0.55, 0.4][ab], aimStart: diff0.aimStart * [1, 0.7, 0.55, 0.4][ab] } : diff0;
   // nobody can be hurt during preparation: only drones are worth shooting
   const p = w.phase === 'prep' ? { ...p0, visible: [] } : p0;
   if (p.visible.length === 0) {
-    if (shootDrone(w, a, b, diff, intent)) return true;
+    if (shootDrone(w, a, b, diff, intent) || shootTurret(w, a, b, diff, intent)) return true;
     // finish a fallback even after losing sight: reload in cover before re-peeking
     if (b.fallback && w.tick < b.fallback.until) {
       followPath(w, a, b, b.fallback.pos, intent, { arrive: 0.3 });
@@ -200,6 +204,34 @@ function shootDrone(w: World, a: Actor, b: BotState, diff: DiffParams, intent: A
   intent.aim = turnToward(a, ang, diff.turnRate);
   intent.fire = w.tick - b.acquiredTick >= b.reactionTicks && Math.abs(normAngle(intent.aim - ang)) < 0.1 && canShoot(w, a);
   intent.ads = true;
+  b.status = 'Fighting';
+  return true;
+}
+
+/** Enemy sentry turrets get shot down when nobody else is in view. */
+function shootTurret(w: World, a: Actor, b: BotState, diff: DiffParams, intent: ActorIntent): boolean {
+  if (w.phase === 'prep') return false;
+  let best: { id: number; pos: Vec } | null = null;
+  let bd = Infinity;
+  for (const e of w.entities) {
+    if (e.kind !== 'turret' || e.team === a.team) continue;
+    const d = dist(a.pos, e.pos);
+    if (d < bd && d < 12 && canSee(w, a.pos, e.pos)) {
+      bd = d;
+      best = e;
+    }
+  }
+  if (!best) return false;
+  if (b.targetId !== -best.id) {
+    b.targetId = -best.id;
+    b.acquiredTick = w.tick;
+    b.reactionTicks = secs(w.rng.range(diff.reaction[0], diff.reaction[1]));
+  }
+  const ang = angleTo(a.pos, best.pos);
+  intent.aim = turnToward(a, ang, diff.turnRate);
+  intent.fire = w.tick - b.acquiredTick >= b.reactionTicks && Math.abs(normAngle(intent.aim - ang)) < 0.1 && canShoot(w, a);
+  intent.ads = a.weapon.pellets === 1;
+  if (a.mag === 0 && a.reserve > 0) intent.reload = true;
   b.status = 'Fighting';
   return true;
 }

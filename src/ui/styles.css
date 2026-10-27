@@ -2455,3 +2455,305 @@ button {
   font-size: 18px;
   color: var(--amber);
 }
+
+/* ================= WILD CARD DRAFT ================= */
+.draft {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(ellipse at 50% 45%, rgba(60, 40, 90, 0.55), rgba(8, 10, 16, 0.98) 70%);
+  padding: calc(8px + var(--safe-t)) calc(16px + var(--safe-r)) calc(8px + var(--safe-b)) calc(16px + var(--safe-l));
+}
+.draft .os-title {
+  color: #c79bff;
+}
+.wc-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  perspective: 900px;
+}
+.wc-card {
+  width: min(168px, 26vw);
+  height: min(232px, calc(100vh - 150px));
+  position: relative;
+  transition: transform 160ms;
+}
+.wc-card.chosen {
+  transform: translateY(-8px) scale(1.04);
+}
+.wc-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.wc-card.flipped .wc-inner {
+  transform: rotateY(180deg);
+}
+.wc-back,
+.wc-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.wc-back {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background:
+    repeating-linear-gradient(45deg, rgba(199, 155, 255, 0.12) 0 6px, transparent 6px 12px),
+    linear-gradient(160deg, #2b2246, #141020);
+  border: 2px solid #6b4fa0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  animation: wcbob 2.4s ease-in-out infinite;
+}
+.wc-back-mark {
+  font-family: var(--cond);
+  font-weight: 800;
+  font-size: 64px;
+  color: #c79bff;
+  text-shadow: 0 0 18px rgba(199, 155, 255, 0.6);
+}
+.wc-back small {
+  font-family: var(--cond);
+  letter-spacing: 0.2em;
+  color: var(--dim);
+  font-size: 11px;
+}
+@keyframes wcbob {
+  50% {
+    filter: brightness(1.2);
+  }
+}
+.wc-face {
+  transform: rotateY(180deg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 10px;
+  text-align: center;
+  background: linear-gradient(170deg, #252c42, #121622);
+  border: 2px solid var(--line2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.wc-card.static .wc-inner {
+  transform: rotateY(180deg);
+  transition: none;
+}
+.wc-face.rare {
+  border-color: #4fa3ff;
+  box-shadow: 0 0 16px rgba(79, 163, 255, 0.35);
+}
+.wc-face.epic {
+  border-color: #c79bff;
+  box-shadow: 0 0 22px rgba(199, 155, 255, 0.5);
+  background: linear-gradient(170deg, #34264f, #141020);
+}
+.wc-card.chosen .wc-face {
+  border-color: var(--amber);
+  box-shadow: 0 0 26px rgba(240, 180, 76, 0.7);
+}
+.wc-rarity {
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+.wc-face.rare .wc-rarity {
+  color: #7fbaff;
+}
+.wc-face.epic .wc-rarity {
+  color: #d9b8ff;
+}
+.wc-icon img {
+  width: 56px;
+  height: 56px;
+  image-rendering: pixelated;
+  margin: 4px 0 2px;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.5));
+}
+.wc-name {
+  font-family: var(--cond);
+  font-weight: 800;
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+.wc-level {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--amber);
+  margin: 3px 0;
+}
+.wc-level i {
+  width: 10px;
+  height: 4px;
+  background: var(--line2);
+  transform: skewX(-20deg);
+}
+.wc-level i.on {
+  background: var(--amber);
+}
+.wc-desc {
+  font-size: calc(12px * var(--text-scale));
+  font-weight: 700;
+  line-height: 1.25;
+}
+.wc-flav {
+  font-size: 10.5px;
+  color: var(--dim);
+  margin-top: 3px;
+  line-height: 1.25;
+}
+.wc-votes {
+  margin-top: auto;
+  display: flex;
+  gap: 2px;
+}
+.wc-votes img {
+  width: 22px;
+  height: 22px;
+  border-bottom: 2px solid var(--teal);
+  animation: kpopin 200ms ease-out;
+}
+.wc-decks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+.wc-decks .own {
+  color: var(--teal);
+}
+.wc-decks .foe {
+  color: var(--coral);
+  margin-left: 8px;
+}
+.wc-strip {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.wc-chip {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  background: rgba(8, 10, 16, 0.8);
+  border: 1px solid var(--line2);
+  border-radius: 3px;
+}
+.wc-chip.rare {
+  border-color: #4fa3ff;
+}
+.wc-chip.epic {
+  border-color: #c79bff;
+}
+.wc-chip img {
+  width: 20px;
+  height: 20px;
+  margin: 1px;
+  image-rendering: pixelated;
+}
+.wc-chip b {
+  position: absolute;
+  right: -3px;
+  bottom: -4px;
+  font-family: var(--cond);
+  font-size: 10px;
+  color: var(--amber);
+  text-shadow: 0 1px 1px #000;
+}
+.draft.reveal {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(8, 10, 16, 0.92);
+}
+.wc-reveal-title {
+  font-family: var(--cond);
+  font-weight: 800;
+  font-style: italic;
+  font-size: 30px;
+  color: var(--coral);
+  letter-spacing: 0.06em;
+}
+.hud .wc-strip.hud-own {
+  position: absolute;
+  top: calc(76px + var(--safe-t));
+  left: calc(8px + var(--safe-l));
+  max-width: 120px;
+  pointer-events: none;
+}
+.hud .wc-strip.hud-foe {
+  position: absolute;
+  top: calc(6px + var(--safe-t));
+  right: calc(8px + var(--safe-r));
+  pointer-events: none;
+}
+.hud .killfeed {
+  top: calc(34px + var(--safe-t));
+}
+.act.card {
+  width: 54px;
+  height: 54px;
+  border-color: #c79bff;
+  background: rgba(60, 40, 90, 0.5);
+}
+.act.card.turret {
+  right: 214px;
+  bottom: 156px;
+}
+.act.card.missile {
+  right: 276px;
+  bottom: 110px;
+}
+.act.card em {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  font-style: normal;
+  font-family: var(--cond);
+  font-weight: 800;
+  font-size: 12px;
+  background: #c79bff;
+  color: #140f20;
+  border-radius: 8px;
+  padding: 0 4px;
+}
+.cluster {
+  width: 340px;
+}
+.hud[data-mode='drone'] .act.card {
+  display: none;
+}
+@media (max-height: 430px) {
+  .wc-icon img {
+    width: 40px;
+    height: 40px;
+  }
+  .wc-name {
+    font-size: 17px;
+  }
+  .wc-back-mark {
+    font-size: 48px;
+  }
+}

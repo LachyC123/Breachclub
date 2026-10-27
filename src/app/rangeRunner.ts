@@ -81,6 +81,8 @@ export class RangeRunner implements Runner {
       mapId: 'range',
       mode: 'range',
       humanWeapon: this.pick.weapon,
+      // practise the active wild cards too (they recharge in the range)
+      cards: [{ turret: 1, missile: 1 }, {}],
     });
     this.ctx.view.attach(this.world);
     this.ctx.view.fit();
@@ -184,7 +186,7 @@ export class RangeRunner implements Runner {
     if (this.state === 'select') return;
     this.hud.root.classList.toggle('previewing', this.input.controls.gadget.active);
     this.hud.setPoints(this.pts);
-    this.hud.update({ w, humanId: human?.id ?? -1, score: [0, 0], round: 0, statuses: new Map(), interact: human ? bestInteract(w, human) : null, gadget: this.input.gadgetUi(), ads: !!human?.ads, drone: null, range: true });
+    this.hud.update({ w, humanId: human?.id ?? -1, score: [0, 0], round: 0, statuses: new Map(), interact: human ? bestInteract(w, human) : null, gadget: this.input.gadgetUi(), ads: !!human?.ads, drone: null, range: true, cards: w.cards, charges: w.cardCharges[0] });
     const acc = this.shots ? Math.round((this.hits / this.shots) * 100) : 0;
     const txt = `${this.shots}|${this.hits}|${this.elims}`;
     if (txt !== this.lastCount) {

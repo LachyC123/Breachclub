@@ -4,6 +4,7 @@ import { secs, type Side, type WeaponDef } from '../content/defs';
 import { World, type Difficulty, type RoundConfig } from '../sim/world';
 import { AIDirector } from '../ai/brain';
 import type { ActorIntent, TeamId } from '../sim/types';
+import type { CardId, TeamCards } from '../content/cards';
 
 export interface MatchConfig {
   seed: number;
@@ -46,6 +47,8 @@ export class Match {
   world!: World;
   ai!: AIDirector;
   pick: RoundPick;
+  /** wild cards held by the player's squad (0) and the opponents (1) for this match */
+  cards: [TeamCards, TeamCards] = [{}, {}];
   readonly matchId: string;
 
   constructor(cfg: MatchConfig, pick?: RoundPick) {
@@ -86,6 +89,7 @@ export class Match {
       prepSeconds: this.cfg.prepSeconds,
       actionSeconds: this.cfg.actionSeconds,
       humanWeapon: pick.weapon,
+      cards: [{ ...this.cards[0] }, { ...this.cards[1] }],
     };
     this.world = new World(rc);
     this.ai = new AIDirector(this.world);
@@ -114,6 +118,11 @@ export class Match {
       return true;
     }
     return false;
+  }
+
+  /** Draft a card: new at level 1, or one level up (max 3). */
+  addCard(team: TeamId, id: CardId) {
+    this.cards[team][id] = Math.min(3, (this.cards[team][id] ?? 0) + 1);
   }
 
   get matchOver(): boolean {

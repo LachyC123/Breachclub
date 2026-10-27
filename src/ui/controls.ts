@@ -4,7 +4,7 @@
 //  - FIRE button: hold to shoot; drag the thumb off it to steer aim while firing
 //  - ADS toggle, Gadget (press-drag-release preview, tap for second action), Interact (hold), Reload
 // Every pointer is tracked independently; everything resets on cancel, blur, rotation and death.
-import type { ActorIntent, GadgetCommand, Vec } from '../sim/types';
+import type { ActorIntent, CardCommand, GadgetCommand, Vec } from '../sim/types';
 import { emptyIntent } from '../sim/types';
 
 export interface GadgetPreview {
@@ -33,6 +33,12 @@ export class Controls {
   /** set by the runner: decides what a gadget press means right now */
   gadgetTapAction: () => GadgetCommand | null = () => null;
   gadgetCommitAction: (p: GadgetPreview) => GadgetCommand | null = () => null;
+  /** what the drag preview is aiming: the operator gadget or a Missile Strike */
+  previewKind: 'gadget' | 'missile' = 'gadget';
+  missileAllowed: () => boolean = () => false;
+  missileCommitAction: (p: GadgetPreview) => CardCommand | null = () => null;
+  private cardCmd: CardCommand | null = null;
+  private xHeld = false;
   gadgetPreviewAllowed: () => boolean = () => false;
   onAnyInput: () => void = () => {};
   usingTouch = false;
@@ -133,7 +139,7 @@ export class Controls {
     el.addEventListener('lostpointercapture', end);
   }
 
-  bindGadgetButton(el: HTMLElement) {
+  bindGadgetButton(el: HTMLElement, kind: 'gadget' | 'missile' = 'gadget') {
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -144,7 +150,8 @@ export class Controls {
       const r = el.getBoundingClientRect();
       this.gadgetOrigin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
       this.gadgetDownAt = performance.now();
-      if (this.gadgetPreviewAllowed()) {
+      this.previewKind = kind;
+      if (kind === 'gadget' ? this.gadgetPreviewAllowed() : this.missileAllowed()) {
         this.gadget = { active: true, dir: { x: 0, y: 0 }, worldTarget: null, overCancel: false };
         this.firing = false;
         this.cancelZone.style.display = 'block';
@@ -167,9 +174,12 @@ export class Controls {
       this.gadgetPtr = null;
       if (this.gadget.active) {
         const cancel = this.gadget.overCancel || e.type === 'pointercancel';
-        if (!cancel) this.gadgetCmd = this.gadgetCommitAction(this.gadget);
+        if (!cancel) {
+          if (kind === 'missile') this.cardCmd = this.missileCommitAction(this.gadget);
+          else this.gadgetCmd = this.gadgetCommitAction(this.gadget);
+        }
         this.endPreview();
-      } else if (performance.now() - this.gadgetDownAt < 600) {
+      } else if (kind === 'gadget' && performance.now() - this.gadgetDownAt < 600) {
         this.gadgetCmd = this.gadgetTapAction();
       }
     };
@@ -221,6 +231,10 @@ export class Controls {
   }
 
   private slideTap = false;
+
+  requestTurret() {
+    this.cardCmd = { type: 'turret' };
+  }
 
   requestSlide() {
     this.slideTap = true;
@@ -347,6 +361,12 @@ export class Controls {
     if (k === 'e') this.interactHeld = true;
     if (k === 'f') this.tagTap = true;
     if (k === ' ') this.slideTap = true;
+    if (k === 't') this.cardCmd = { type: 'turret' };
+    if (k === 'x' && !this.gadget.active) {
+      this.xHeld = true;
+      this.previewKind = 'missile';
+      if (this.missileAllowed()) this.gadget = { active: true, dir: { x: 0, y: 0 }, worldTarget: this.mouseWorld, overCancel: false };
+    }
     if (k === 'q') {
       this.qHeld = true;
       this.gadgetDownAt = performance.now();
@@ -359,6 +379,14 @@ export class Controls {
     const k = e.key.toLowerCase();
     this.keys.delete(k);
     if (k === 'e') this.interactHeld = false;
+    if (k === 'x' && this.xHeld) {
+      this.xHeld = false;
+      if (this.gadget.active) {
+        this.gadget.worldTarget = this.mouseWorld;
+        this.cardCmd = this.missileCommitAction(this.gadget);
+        this.endPreview();
+      }
+    }
     if (k === 'q' && this.qHeld) {
       this.qHeld = false;
       if (this.gadget.active) {
@@ -431,6 +459,8 @@ export class Controls {
     this.reloadTap = false;
     it.gadget = this.gadgetCmd;
     this.gadgetCmd = null;
+    it.card = this.cardCmd;
+    this.cardCmd = null;
     return it;
   }
 
@@ -449,6 +479,8 @@ export class Controls {
     this.reloadTap = false;
     this.tagTap = false;
     this.gadgetCmd = null;
+    this.cardCmd = null;
+    this.xHeld = false;
     this.movePtr = null;
     this.aimPtr = null;
     this.firePtr = null;

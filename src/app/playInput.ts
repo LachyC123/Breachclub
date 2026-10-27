@@ -8,6 +8,8 @@ import type { PreviewState } from '../render/view';
 import type { World } from '../sim/world';
 import type { ActorIntent, DroneEntity, GadgetCommand, HingeEntity, SledEntity, Vec } from '../sim/types';
 import { previewSledPath, validateHingePlacement, validateRamLaunch, HINGE_REMOTE_RANGE } from '../sim/gadgets';
+import { AIMBOT_CONE, MISSILE_RANGE } from '../sim/cards';
+import { lvl } from '../content/cards';
 import { canSee } from '../sim/perception';
 import { angleTo, dist, normAngle, type GeoState } from '../sim/geometry';
 
@@ -32,6 +34,19 @@ export class PlayInput {
     c.bindHoldButton(hud.interactBtn, (held) => c.setInteract(held));
     c.bindTap(hud.tagBtn, () => c.requestTag());
     c.bindTap(hud.slideBtn, () => c.requestSlide());
+    c.bindTap(hud.turretBtn, () => c.requestTurret());
+    c.bindGadgetButton(hud.missileBtn, 'missile');
+    c.missileAllowed = () => {
+      const w = this.world();
+      const a = this.human();
+      const ok = !!w && !!a && a.alive && (w.phase === 'action' || w.phase === 'armed') && w.cardCharges[a.team].missile > 0;
+      if (!ok) this.sfx.play('invalid');
+      return ok;
+    };
+    c.missileCommitAction = (p) => {
+      const t = this.missileTarget(p);
+      return t ? { type: 'missile', x: t.x, y: t.y } : null;
+    };
     c.gadgetPreviewAllowed = () => this.previewAllowed();
     c.gadgetTapAction = () => this.tap();
     c.gadgetCommitAction = (p) => this.commit(p);
@@ -143,11 +158,28 @@ export class PlayInput {
     };
   }
 
+  /** Missile aim: drag distance maps to range (or the mouse point), clamped to the strike range. */
+  private missileTarget(p: GadgetPreview): Vec | null {
+    const a = this.human();
+    if (!a) return null;
+    let off: Vec;
+    if (p.worldTarget && !this.controls.usingTouch) off = { x: p.worldTarget.x - a.pos.x, y: p.worldTarget.y - a.pos.y };
+    else off = { x: (p.dir.x / 100) * 8, y: (p.dir.y / 100) * 8 };
+    const len = Math.hypot(off.x, off.y);
+    if (len < 0.5) off = { x: Math.cos(a.facing) * 6, y: Math.sin(a.facing) * 6 };
+    else if (len > MISSILE_RANGE) off = { x: (off.x / len) * MISSILE_RANGE, y: (off.y / len) * MISSILE_RANGE };
+    return { x: a.pos.x + off.x, y: a.pos.y + off.y };
+  }
+
   preview(): PreviewState {
     const c = this.controls;
     const w = this.world();
     const a = this.human();
     if (!w || !a || !a.alive || !c.gadget.active) return { kind: 'none' };
+    if (c.previewKind === 'missile') {
+      const t = this.missileTarget(c.gadget);
+      return t ? { kind: 'missile', missilePos: t } : { kind: 'none' };
+    }
     if (a.operatorId === 'ram') {
       const ang = this.ramAngle(c.gadget);
       const pv = previewSledPath(this.knownGeo(w), a.pos, ang);
@@ -191,8 +223,11 @@ export class PlayInput {
   private aimAssist(w: World, intent: ActorIntent) {
     const a = w.human();
     const mode = this.settings().aimAssist;
-    if (!a || intent.aim === null || mode === 'off' || !this.controls.usingTouch) return;
-    const deg = (mode === 'low' ? 6 : 10) + (intent.ads ? 4 : 0);
+    if (!a || intent.aim === null) return;
+    // Aimbot card: a hard snap onto enemies you can see, on any input
+    const bot = lvl(w.cards[a.team], 'aimbot');
+    if (!bot && (mode === 'off' || !this.controls.usingTouch)) return;
+    const deg = bot ? AIMBOT_CONE[bot] : (mode === 'low' ? 6 : 10) + (intent.ads ? 4 : 0);
     const cone = (deg * Math.PI) / 180;
     let best: { d: number; ang: number } | null = null;
     for (const e of w.actors) {
@@ -206,7 +241,7 @@ export class PlayInput {
       if (!best || Math.abs(diff) < Math.abs(best.ang)) best = { d, ang: diff };
     }
     // stronger when firing (sticky), lighter while just steering
-    if (best) intent.aim = intent.aim + best.ang * (intent.fire ? 0.6 : 0.3);
+    if (best) intent.aim = intent.aim + best.ang * (bot ? 0.9 : intent.fire ? 0.6 : 0.3);
   }
 
   /** Intent for this tick. `droneMode` routes the move stick to the player's drone. */

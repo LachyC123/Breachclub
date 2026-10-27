@@ -23,7 +23,7 @@ export type SfxName =
   | 'invalid' | 'death' | 'vault'
   | 'console_tick' | 'armed_alarm' | 'shutoff' | 'round_win' | 'round_lose'
   | 'ui_tap' | 'ui_confirm' | 'ui_back' | 'takeover' | 'prep_start' | 'action_start' | 'low_time'
-  | 'hitmarker' | 'kill_confirm' | 'drone_tag' | 'drone_move' | 'slide' | 'stinger1' | 'stinger2' | 'stinger3';
+  | 'hitmarker' | 'kill_confirm' | 'drone_tag' | 'drone_move' | 'slide' | 'stinger1' | 'stinger2' | 'stinger3' | 'turret_shot' | 'missile_siren' | 'pulse' | 'card_flip' | 'card_play';
 
 export type SfxCategory = 'weapons' | 'world' | 'ui' | 'ambience' | 'music';
 
@@ -53,7 +53,7 @@ const CATEGORY: Record<SfxName, SfxCategory> = {
   invalid: 'ui', death: 'world', vault: 'world',
   console_tick: 'world', armed_alarm: 'world', shutoff: 'world', round_win: 'ui', round_lose: 'ui',
   ui_tap: 'ui', ui_confirm: 'ui', ui_back: 'ui', takeover: 'ui', prep_start: 'ui', action_start: 'ui', low_time: 'ui',
-  hitmarker: 'weapons', kill_confirm: 'weapons', drone_tag: 'ui', drone_move: 'world', slide: 'world', stinger1: 'ui', stinger2: 'ui', stinger3: 'ui',
+  hitmarker: 'weapons', kill_confirm: 'weapons', drone_tag: 'ui', drone_move: 'world', slide: 'world', stinger1: 'ui', stinger2: 'ui', stinger3: 'ui', turret_shot: 'weapons', missile_siren: 'world', pulse: 'world', card_flip: 'ui', card_play: 'ui',
 };
 
 /** Internal mix trims per category (multiplied with the user's slider). */
@@ -706,6 +706,29 @@ const SYN: Record<SfxName, (s: Syn) => void> = {
       s.tone({ type: 'sawtooth', f, a: 0.005, hold: 0.08, d: 0.2, peak: 0.06, filt: 'lowpass', ff: 700, ff1: 4000, fglide: 0.1 });
     }
     s.tone({ type: 'square', f: 587.33, at: 0.12, hold: 0.05, d: 0.18, peak: 0.055, filt: 'lowpass', ff: 3000 });
+  },
+  turret_shot: (s) => {
+    // thin mechanical chatter
+    s.noise({ filt: 'bandpass', ff: 3200, q: 1.5, d: 0.03, peak: 0.5 });
+    s.tone({ type: 'square', f: 420, f1: 180, d: 0.04, peak: 0.12, filt: 'lowpass', ff: 2400 });
+  },
+  missile_siren: (s) => {
+    // falling whistle from high to low over the warning window
+    s.tone({ type: 'sine', f: 2200, f1: 500, glide: 1.5, a: 0.05, hold: 1.4, d: 0.1, peak: 0.12 });
+    s.tone({ type: 'triangle', f: 2210, f1: 505, glide: 1.5, a: 0.05, hold: 1.4, d: 0.1, peak: 0.06 });
+    s.noise({ kind: 'pink', filt: 'highpass', ff: 3000, a: 1.0, at: 0.4, d: 0.3, peak: 0.08 });
+  },
+  pulse: (s) => {
+    s.fm({ f: 880, ratio: 1.5, index: 3, index1: 0.2, d: 0.6, peak: 0.08 });
+    s.tone({ f: 1760, f1: 1320, d: 0.25, peak: 0.05 });
+  },
+  card_flip: (s) => {
+    s.noise({ filt: 'bandpass', ff: 3000, ff1: 6000, q: 1.5, d: 0.05, peak: 0.3 });
+    s.tone({ type: 'triangle', f: 1046.5, at: 0.03, d: 0.08, peak: 0.07 });
+  },
+  card_play: (s) => {
+    [523.25, 783.99, 1046.5, 1568].forEach((f, i) => s.tone({ type: 'triangle', f, at: i * 0.06, hold: 0.03, d: 0.18, peak: 0.1 }));
+    s.noise({ kind: 'pink', filt: 'highpass', ff: 4000, d: 0.3, peak: 0.08 });
   },
   stinger1: (s) => {
     s.tone({ type: 'square', f: 659.3, hold: 0.04, d: 0.08, peak: 0.08, filt: 'lowpass', ff: 3000 });

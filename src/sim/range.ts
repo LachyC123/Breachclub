@@ -65,6 +65,18 @@ export function stepRange(w: World) {
       w.bumpGeometry();
     }
   });
+  // active wild cards recharge
+  const ch = w.cardCharges[w.attackTeam];
+  for (const k of ['turret', 'missile'] as const) {
+    const held = w.cards[w.attackTeam][k] ?? 0;
+    if (!held || ch[k] > 0) continue;
+    const key = `card_${k}`;
+    w.rangeTimers[key] ??= w.tick;
+    if (w.tick - w.rangeTimers[key] >= secs(GADGET_RESET + 2)) {
+      ch[k] = held;
+      delete w.rangeTimers[key];
+    }
+  }
   // blown barrels come back after a few seconds
   w.map.barrels.forEach((p, i) => {
     if (w.entities.some((e) => e.kind === 'barrel' && Math.abs(e.pos.x - p.x) < 0.01 && Math.abs(e.pos.y - p.y) < 0.01)) return;

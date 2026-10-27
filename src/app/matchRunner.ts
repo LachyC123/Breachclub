@@ -21,8 +21,13 @@ import type { ActorIntent, Vec } from '../sim/types';
 import type { Order } from '../ai/brain';
 import { setAutopilot } from '../ai/control';
 import { ScoreTracker } from './scoring';
+import { draftScreen, enemyRevealScreen } from '../ui/draft';
+import { cardById, dealCards } from '../content/cards';
+import { Rng } from '../sim/rng';
+import { lookOf } from '../ui/menu';
+import { displayName } from '../content/defs';
 
-type State = 'loading' | 'opselect' | 'spawn' | 'playing' | 'dead' | 'takeover' | 'spectate' | 'roundend' | 'matchend' | 'paused';
+type State = 'loading' | 'draft' | 'opselect' | 'spawn' | 'playing' | 'dead' | 'takeover' | 'spectate' | 'roundend' | 'matchend' | 'paused';
 
 interface Hint {
   id: string;
@@ -159,9 +164,46 @@ export class MatchRunner implements Runner {
       difficulty: this.opts.cfg.difficulty,
       squads: [SIDE_SQUADS[side], SIDE_SQUADS[side === 'attack' ? 'defence' : 'attack']],
     });
-    el.addEventListener('pointerdown', () => this.state === 'loading' && this.showOpSelect());
+    el.addEventListener('pointerdown', () => this.state === 'loading' && this.showDraft());
     this.setScreen(el);
-    window.setTimeout(() => this.state === 'loading' && this.screen === el && this.showOpSelect(), 2600);
+    window.setTimeout(() => this.state === 'loading' && this.screen === el && this.showDraft(), 2600);
+  }
+
+  /** Wild card draft: your squad picks one of three face-down cards; the opponents pick too. */
+  private showDraft() {
+    this.state = 'draft';
+    this.hud.root.style.display = 'none';
+    this.setOverlay(null);
+    const m = this.match;
+    const rng = new Rng((m.cfg.seed ^ ((m.roundIndex + 1) * 7907)) >>> 0);
+    const rand = () => rng.next();
+    const hand = dealCards(rand, m.cards[0]);
+    // opponents favour levelling what they have, then flashier cards
+    const enemyHand = dealCards(rand, m.cards[1]);
+    const enemyPick = enemyHand
+      .map((id) => ({ id, s: (m.cards[1][id] ? 1.5 : 0) + (cardById(id).rarity === 'epic' ? 1.2 : cardById(id).rarity === 'rare' ? 0.6 : 0) + rand() }))
+      .sort((a, b) => b.s - a.s)[0].id;
+    const side = m.playerSide();
+    const mates = SIDE_SQUADS[side].filter((o) => o !== (this.lastPick?.op ?? SIDE_SQUADS[side][0])).slice(0, 2);
+    const votes = mates.map((op) => ({ look: lookOf(op), name: displayName(op), pick: Math.floor(rand() * hand.length) }));
+    this.setScreen(
+      draftScreen(
+        { round: m.roundIndex, hand, owned: m.cards[0], enemyOwned: m.cards[1], votes, seconds: 20 },
+        {
+          flip: () => this.ctx.sfx.play('card_flip'),
+          tap: () => this.click(),
+          play: (id) => {
+            this.ctx.sfx.play('card_play');
+            m.addCard(0, id);
+            m.addCard(1, enemyPick);
+            const el = enemyRevealScreen(enemyPick, m.cards[1][enemyPick] ?? 1);
+            el.addEventListener('pointerdown', () => this.state === 'draft' && this.showOpSelect());
+            this.setScreen(el);
+            window.setTimeout(() => this.state === 'draft' && this.screen === el && this.showOpSelect(), 1900);
+          },
+        },
+      ),
+    );
   }
 
   private showOpSelect() {
@@ -343,7 +385,7 @@ export class MatchRunner implements Runner {
     this.playerPts = 0;
     if (m.matchOver) return this.showMatchEnd();
     m.nextRound();
-    this.showOpSelect();
+    this.showDraft();
   }
 
   private showMatchEnd() {
@@ -370,7 +412,7 @@ export class MatchRunner implements Runner {
             this.matchPts = 0;
             this.scoring = new ScoreTracker();
             this.lastPick = null;
-            this.showOpSelect();
+            this.showDraft();
           },
           home: () => (this.click('back'), this.ctx.home()),
         },
@@ -599,7 +641,7 @@ export class MatchRunner implements Runner {
     this.hud.root.classList.toggle('previewing', this.input.controls.gadget.active);
     const interact = human && human.alive && !drone ? bestInteract(w, human) : null;
     this.hud.setPoints(this.playerPts);
-    this.hud.update({ w, humanId, score: m.score, round: m.roundIndex, statuses: this.statuses(), interact, gadget: drone ? null : this.input.gadgetUi(), ads: !!human?.ads, drone: drone?.ui ?? null });
+    this.hud.update({ w, humanId, score: m.score, round: m.roundIndex, statuses: this.statuses(), interact, gadget: drone ? null : this.input.gadgetUi(), ads: !!human?.ads, drone: drone?.ui ?? null, cards: w.cards, charges: w.cardCharges[0] });
     this.updateHints(w);
   }
 

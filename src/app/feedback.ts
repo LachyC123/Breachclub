@@ -96,7 +96,7 @@ export class Feedback {
       let name: SfxName | null = null;
       switch (s.kind) {
         case 'shot':
-          name = src ? (`shot_${src.weapon.id}` as SfxName) : 'shot_smg';
+          name = s.sourceId < 0 ? 'turret_shot' : src ? (`shot_${src.weapon.id}` as SfxName) : 'shot_smg';
           break;
         case 'step': {
           const room = roomAt(w.map, s.pos);
@@ -138,8 +138,8 @@ export class Feedback {
           const a = w.actor(e.actorId);
           if (!a) break;
           if (a.team === 0 || w.visible[0].has(a.id)) this.playAt(w, 'hit_flesh', a.pos, 10, false, a.id === human?.id ? 1 : 0.7);
-          if (e.sourceId === human?.id && a.team !== 0 && e.hpAfter > 0) this.sfx.play('hitmarker', { volume: 0.8 });
-          if (a.id === human?.id) {
+          if (e.sourceId === human?.id && a.team !== 0 && e.hpAfter > 0 && !e.dot) this.sfx.play('hitmarker', { volume: 0.8 });
+          if (a.id === human?.id && !e.dot) {
             this.hud.hurt(e.amount);
             const src = w.actor(e.sourceId);
             // direction only toward a source the team can see, else a vague flash from behind
@@ -201,6 +201,27 @@ export class Feedback {
           if (a && a.id === human?.id && e.cause === 'sled') this.stats.sledBreach = roomAt(w.map, w.map.softGroups[e.group].center)?.name ?? 'a room';
           break;
         }
+        case 'missileIncoming':
+          // the warning is for everyone: the siren plays wherever it lands
+          this.playAt(w, 'missile_siren', e.pos, 30, false, 1);
+          if (e.team !== 0) this.hud.toast('INCOMING MISSILE — get out of the red circle!');
+          else if (e.ownerId === human?.id) this.hud.toast('Missile inbound', true);
+          break;
+        case 'turretDeployed':
+          if (w.actor(e.ownerId)?.team === 0 || w.visibleEntities[0].has(e.turretId)) this.playAt(w, 'hinge_place', w.actor(e.ownerId)?.pos ?? this.listener(w), 10);
+          if (e.ownerId === human?.id) this.hud.toast('Sentry turret deployed', true);
+          break;
+        case 'turretDestroyed':
+          this.playAt(w, 'cover_break', e.pos, 10, false, 0.8);
+          break;
+        case 'pulse':
+          this.sfx.play('pulse', { volume: e.team === 0 ? 0.8 : 0.6 });
+          if (e.team === 0) this.hud.toast('RECON PULSE — enemies marked', true);
+          else this.hud.toast("You've been pinged by a recon pulse");
+          break;
+        case 'healed':
+          if (e.actorId === human?.id) this.hud.toast(`Vampire +${e.amount} HP`, true);
+          break;
         case 'barrelLit':
           if (this.pointSeen(w, e.pos)) this.playAt(w, 'charge_beep', e.pos, 10, false, 0.9);
           break;
