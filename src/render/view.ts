@@ -699,7 +699,10 @@ export class WorldView {
     if (this.frame % 2 === 0 || this.polyCache.length === 0) this.drawFog(o.droneId);
     this.drawOverlay(humanId, o.preview, o.laser, o.ads);
     this.drawRain(dt);
-    this.updateCamera(humanId, o.focus, o.ads, dt);
+    // while aiming a missile the camera drifts toward the strike point so you can see it
+    const me = w.actor(humanId);
+    const aimFocus = o.preview.kind === 'missile' && o.preview.missilePos && me ? { x: (me.pos.x + o.preview.missilePos.x) / 2, y: (me.pos.y + o.preview.missilePos.y) / 2 } : null;
+    this.updateCamera(humanId, o.focus ?? aimFocus, o.ads, dt);
   }
 
   private renderActor(a: Actor, p: Vec, humanId: number) {

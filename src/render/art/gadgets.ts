@@ -153,11 +153,15 @@ export function buildBarrel(lit: boolean): HTMLCanvasElement {
 
 /** Sentry turret base (the gun barrel is drawn as a rotating overlay line). */
 export function buildTurret(team: 0 | 1): HTMLCanvasElement {
-  const p = new Pix(14, 14);
+  const p = new Pix(18, 18);
   const accent = team === 0 ? P.teal : P.coral;
-  p.line(2, 13, 5, 8, P.slate3).line(11, 13, 8, 8, P.slate3).vl(7, 8, 13, P.slate3);
-  p.ellipse(7, 7, 4, 3, P.slate2).ellipse(7, 6, 3, 2, P.slate).rect(5, 5, 5, 1, accent);
-  p.px(7, 6, P.coralLight);
+  const light = team === 0 ? P.tealLight : P.coralLight;
+  // tripod legs
+  p.line(3, 17, 7, 10, P.slate3).line(14, 17, 10, 10, P.slate3).vl(8, 10, 17, P.slate3).vl(9, 10, 17, P.slate2);
+  // housing with team stripe and sensor eye
+  p.ellipse(9, 8, 6, 4, P.slate2).ellipse(9, 7, 5, 3, P.slate).hl(4, 13, 9, P.navy2);
+  p.rect(5, 5, 8, 2, accent).hl(5, 12, 5, light);
+  p.rect(8, 8, 2, 2, P.coralLight).px(8, 8, P.white);
   p.outline(P.outline);
   return p.c;
 }

@@ -51,6 +51,8 @@ A match runs:
 | Gadget | **GADGET** button (see below) | Hold **Q** to preview, release to commit, tap **Q** for the second action. Esc cancels. |
 | Interact | Hold **INTERACT**. It appears only when something is in reach: Arm, Shut Off, Breach, Reinforce, Barricade, Remove, Vault. | Hold **E** |
 | Reload | **RELOAD** | **R** |
+| Slide | **SLIDE**: a burst in your move direction, then a short cooldown | **Space** |
+| Wild cards | **TURRET**: tap to drop a sentry. **MISSILE**: drag to aim, release to fire, or drag to the cancel zone. | **T** / hold **X** at the mouse |
 | Drone (attack prep) | Left stick drives, **TAG** pings every defender in view, **NEXT CAM** cycles squad drones | W A S D, **F** tag, **N** or Space next cam |
 | Scoreboard / orders | Top-left buttons | **Tab** / **C** |
 | Pause | Top-left pause. The game also pauses on app switch or portrait. | **Esc** |
@@ -61,6 +63,10 @@ A laser sight runs from your muzzle to the first thing that blocks it, and turns
 - **Carbine:** marksman.
 - **Pocket SMG:** run-and-gun.
 - **Scattergun:** pump action, knockback, shell-by-shell reload that firing interrupts.
+
+**Wild cards:** before each round your squad picks one of three face-down cards, and so do the opponents. Cards last the match, and a duplicate levels the card up. Every action scores points, and chains build a combo. The round ends with a rank and medals.
+
+**Explosive barrels:** shoot one and it flashes for a moment, then blows. Get clear.
 
 **Ram (attack): bumper sled**
 - Hold GADGET and drag to aim. A dotted route shows where the sled goes: an amber ring marks the panel it will break, a red X marks a hard stop.

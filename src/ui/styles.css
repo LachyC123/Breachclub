@@ -1742,7 +1742,7 @@ button {
   position: absolute;
   left: 0;
   right: 0;
-  top: 28%;
+  top: 44%;
   text-align: center;
   pointer-events: none;
   animation: bannerin 260ms ease-out;
@@ -2756,4 +2756,8 @@ button {
   .wc-back-mark {
     font-size: 48px;
   }
+}
+
+.hud.range .wc-strip.hud-own {
+  top: calc(118px + var(--safe-t));
 }

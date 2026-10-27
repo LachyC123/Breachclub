@@ -1,6 +1,6 @@
 # Progress
 
-_Last updated: 27 October 2026 — second feedback pass: smarter bots, operator ratings, distinct guns, VFX._
+_Last updated: 27 October 2026 — arcade pass: punchy combat, scoring and announcer, barrels, wild card draft._
 
 ## Status
 
@@ -10,6 +10,72 @@ _Last updated: 27 October 2026 — second feedback pass: smarter bots, operator 
 | M1: complete mechanical loop | Done: one laundrette, 3v3, Ram + Hinge, full round rules |
 | M2: first playable review | Done, then reworked after your feedback (below). **Ready for a second look.** |
 | M3+: six-operator core onward | Not started (by design: review first) |
+
+## Arcade pass (27 Oct 2026, latest)
+
+Your feedback: it isn't arcadey or fun enough, and shooting feels flat. You picked faster/punchier combat, arcade scoring with an announcer, and more destruction, and asked for a FragPunk-style card draft between rounds.
+
+**Punchier combat**
+- Faster pace:
+  - Walk speed 3 → 3.8 tiles/s.
+  - Damage up: SMG 22, carbine 30, scattergun 14 per pellet.
+  - Rounds now last about a minute.
+- **Slide** (button, or Space on desktop):
+  - A 0.32 s burst at 2.3× speed, with a 2.2 s cooldown and extra spread while sliding.
+  - Bots slide into cover and sometimes while strafing.
+- **Hit-stop** on your kills.
+- **Pixel damage numbers:** one per target per shot, red on a kill, green for poison and heals.
+- A kill burst, shake when you're hit, and a slow-motion zoom-in on the round's final kill.
+- Bots holding an angle react faster to targets that walk into their aim, so faster attackers don't simply win. Bot-vs-bot balance is roughly even.
+
+**Arcade scoring** (`src/app/scoring.ts`, same rules for bots)
+- **Points:**
+  - Kills, assists, first blood, trades.
+  - Double and triple kills, ACE, CLUTCH, streaks.
+  - Arming and shutting off the console, breaches, drone tags, fortifying, sled hits, round wins.
+- Actions chained within 5 s build a combo multiplier, up to ×2.
+- **Announcer:** FIRST BLOOD, DOUBLE KILL, ACE, CLUTCH, DEFUSED, ON A ROLL. These are text banners with synthesized stingers (no voice service); enemy feats show smaller in red.
+- **Round summary:** your rank (S–D), points and medals:
+  - MVP, Hunter, Sharpshooter, Wrecker, Eagle Eye, Bulwark, Objective, Survivor.
+- The scoreboard and MVP use points.
+
+**Destruction** (`src/sim/explosions.ts`)
+- **Shared explosion:**
+  - Damage falls off with distance and hard walls block it.
+  - No friendly fire, but you take half of your own blast.
+  - Blasts shove people, chain into other barrels, and blow open unreinforced soft walls and barricades.
+- **Explosive barrels:** 9 on Spin Cycle and 4 in the range (respawning).
+  - Shoot one and it flashes and hisses for 0.4 s, giving people time to get clear, then explodes.
+  - Untouchable during prep.
+  - Bots shoot a barrel next to an enemy when no teammate is in the blast, and defenders don't camp beside barrels.
+
+**Wild card draft** (`src/content/cards.ts`, `src/sim/cards.ts`, `src/ui/draft.ts`)
+- Before every round, your squad is dealt three face-down cards. You flip them, see your teammates' votes, and play one. The opponents' pick is revealed next.
+- Cards last the whole match; drafting a card you already have levels it up (max level 3). Nothing carries beyond the match.
+- **Common:** Adrenaline (speed), Hollow Points (damage), Kevlar (max HP), Quickdraw (reloads, spare mags).
+- **Rare:** Vampire (kills heal), Ghost Step (quiet footsteps), Recon Pulse (pings every enemy on an interval).
+- **Epic:**
+  - **Poison Rounds:** damage over time.
+  - **Explosive Rounds:** every Nth bullet blows up.
+  - **Aimbot:** a hard aim snap, but only onto enemies you can see.
+  - **Sentry Turret:**
+    - An auto-gun that only shoots enemies it can see, after a reaction delay.
+    - 70 HP, lasts 30 s, can be shot down.
+  - **Missile Strike:**
+    - Drag to aim, with a cancel zone.
+    - A 1.6 s warning zone that both teams see, with a siren.
+    - A 2.6-tile blast that opens walls.
+- Active cards give the team charges each round, shown as TURRET and MISSILE buttons (T and X on desktop).
+- Bots drop turrets when holding or stacked, call missiles on enemies they've just seen and away from teammates, and shoot enemy turrets. Your squad's bots leave active cards to you while you're alive.
+- The range gives you both active cards to practise with, and they recharge.
+
+**Tests:** 56 pass. New this pass:
+- Slide.
+- Scoring rules.
+- Explosions: blast, shelter, friendly fire, chains, walls, prep.
+- Every card's effect, refusal and counterplay, plus turret and missile lifecycles.
+
+A headless stress run (`SIM=1 CARDS=4`) with random cards on both sides finishes every round with no errors. The cards get used: 15 turrets and 16 missiles over 24 rounds.
 
 ## Feel pass (27 Oct 2026, later)
 

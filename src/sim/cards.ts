@@ -102,11 +102,18 @@ function useCard(w: World, a: Actor, c: NonNullable<ActorIntent['card']>) {
 /** In front of you if there's room, else at your feet; never in a doorway. */
 function turretSpot(w: World, a: Actor): Vec | null {
   const m = w.map;
-  const tries = [0.9, 0.6, 0].map((d) => ({ x: a.pos.x + Math.cos(a.facing) * d, y: a.pos.y + Math.sin(a.facing) * d }));
+  // front-right first (stays visible beside you), then front-left, straight ahead, at your feet
+  const offs: Array<[number, number]> = [
+    [0.8, 1.2],
+    [-0.8, 1.2],
+    [0, 1.3],
+    [0, 0],
+  ];
+  const tries = offs.map(([da, d]) => ({ x: a.pos.x + Math.cos(a.facing + da) * d, y: a.pos.y + Math.sin(a.facing + da) * d }));
   for (const p of tries) {
     const i = Math.floor(p.y) * m.w + Math.floor(p.x);
     if (i < 0 || i >= m.w * m.h || m.doorOf[i] >= 0 || m.softGroupOf[i] >= 0) continue;
-    if (raycast(w, a.pos, p, 'move', { obs: w.obstacles() }) && p !== tries[2]) continue;
+    if (raycast(w, a.pos, p, 'move', { obs: w.obstacles() }) && p !== tries[3]) continue;
     if (w.entities.some((e) => (e.kind === 'turret' || e.kind === 'barrel') && dist(e.pos, p) < 0.8)) continue;
     return p;
   }

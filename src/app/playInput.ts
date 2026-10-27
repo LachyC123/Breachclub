@@ -164,9 +164,9 @@ export class PlayInput {
     if (!a) return null;
     let off: Vec;
     if (p.worldTarget && !this.controls.usingTouch) off = { x: p.worldTarget.x - a.pos.x, y: p.worldTarget.y - a.pos.y };
-    else off = { x: (p.dir.x / 100) * 8, y: (p.dir.y / 100) * 8 };
+    else off = { x: (p.dir.x / 100) * 5, y: (p.dir.y / 100) * 5 };
     const len = Math.hypot(off.x, off.y);
-    if (len < 0.5) off = { x: Math.cos(a.facing) * 6, y: Math.sin(a.facing) * 6 };
+    if (len < 0.5) off = { x: Math.cos(a.facing) * 5, y: Math.sin(a.facing) * 5 };
     else if (len > MISSILE_RANGE) off = { x: (off.x / len) * MISSILE_RANGE, y: (off.y / len) * MISSILE_RANGE };
     return { x: a.pos.x + off.x, y: a.pos.y + off.y };
   }
