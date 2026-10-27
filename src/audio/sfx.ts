@@ -23,7 +23,7 @@ export type SfxName =
   | 'invalid' | 'death' | 'vault'
   | 'console_tick' | 'armed_alarm' | 'shutoff' | 'round_win' | 'round_lose'
   | 'ui_tap' | 'ui_confirm' | 'ui_back' | 'takeover' | 'prep_start' | 'action_start' | 'low_time'
-  | 'hitmarker' | 'kill_confirm' | 'drone_tag' | 'drone_move' | 'slide';
+  | 'hitmarker' | 'kill_confirm' | 'drone_tag' | 'drone_move' | 'slide' | 'stinger1' | 'stinger2' | 'stinger3';
 
 export type SfxCategory = 'weapons' | 'world' | 'ui' | 'ambience' | 'music';
 
@@ -53,7 +53,7 @@ const CATEGORY: Record<SfxName, SfxCategory> = {
   invalid: 'ui', death: 'world', vault: 'world',
   console_tick: 'world', armed_alarm: 'world', shutoff: 'world', round_win: 'ui', round_lose: 'ui',
   ui_tap: 'ui', ui_confirm: 'ui', ui_back: 'ui', takeover: 'ui', prep_start: 'ui', action_start: 'ui', low_time: 'ui',
-  hitmarker: 'weapons', kill_confirm: 'weapons', drone_tag: 'ui', drone_move: 'world', slide: 'world',
+  hitmarker: 'weapons', kill_confirm: 'weapons', drone_tag: 'ui', drone_move: 'world', slide: 'world', stinger1: 'ui', stinger2: 'ui', stinger3: 'ui',
 };
 
 /** Internal mix trims per category (multiplied with the user's slider). */
@@ -706,6 +706,21 @@ const SYN: Record<SfxName, (s: Syn) => void> = {
       s.tone({ type: 'sawtooth', f, a: 0.005, hold: 0.08, d: 0.2, peak: 0.06, filt: 'lowpass', ff: 700, ff1: 4000, fglide: 0.1 });
     }
     s.tone({ type: 'square', f: 587.33, at: 0.12, hold: 0.05, d: 0.18, peak: 0.055, filt: 'lowpass', ff: 3000 });
+  },
+  stinger1: (s) => {
+    s.tone({ type: 'square', f: 659.3, hold: 0.04, d: 0.08, peak: 0.08, filt: 'lowpass', ff: 3000 });
+    s.tone({ type: 'square', f: 987.8, at: 0.07, hold: 0.06, d: 0.14, peak: 0.08, filt: 'lowpass', ff: 3000 });
+  },
+  stinger2: (s) => {
+    s.noise({ kind: 'pink', filt: 'highpass', ff: 2500, a: 0.05, d: 0.25, peak: 0.12 });
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => s.tone({ type: 'square', f, at: i * 0.05, hold: 0.04, d: 0.16, peak: 0.07, filt: 'lowpass', ff: 3500 }));
+    s.tone({ f: 90, f1: 45, d: 0.3, peak: 0.5 });
+  },
+  stinger3: (s) => {
+    s.tone({ f: 70, f1: 32, d: 0.5, peak: 0.8 });
+    s.noise({ kind: 'pink', filt: 'bandpass', ff: 800, ff1: 5000, q: 0.7, a: 0.08, d: 0.5, peak: 0.25 });
+    [392, 523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => s.tone({ type: 'sawtooth', f, at: 0.04 + i * 0.045, hold: 0.06, d: 0.3, peak: 0.05, filt: 'lowpass', ff: 4000 }));
+    s.fm({ f: 1046.5, ratio: 2, index: 2, index1: 0.1, at: 0.3, d: 0.6, peak: 0.08 });
   },
   slide: (s) => {
     // fabric-on-floor whoosh with a scuff

@@ -184,7 +184,8 @@ export function settingsOverlay(panel: HTMLElement, back: () => void): HTMLEleme
   return h('div', { class: 'overlay-screen' }, h('div', { class: 'ov-panel wide' }, h('div', { class: 'ov-title' }, 'SETTINGS'), panel, h('button', { class: 'cta', onclick: back }, 'BACK')));
 }
 
-function boardRows(w: World, team: 0 | 1, humanId: number, mvp: number): HTMLElement[] {
+function boardRows(w: World, team: 0 | 1, humanId: number, mvp: number, pts?: Map<number, number>): HTMLElement[] {
+  const score = (a: Actor) => scoreOf(a, pts);
   return w.actors
     .filter((a) => a.team === team)
     .sort((a, b) => score(b) - score(a))
@@ -202,16 +203,17 @@ function boardRows(w: World, team: 0 | 1, humanId: number, mvp: number): HTMLEle
     );
 }
 
-/** Points: kills, assists, damage and objective play — enough to pick a fair MVP. */
-export function score(a: Actor): number {
+/** Arcade points when tracked, else a kills/assists/damage estimate. */
+export function scoreOf(a: Actor, pts?: Map<number, number>): number {
+  if (pts) return pts.get(a.id) ?? 0;
   return a.kills * 100 + a.assists * 40 + Math.round(a.damageDealt / 2);
 }
 
-export function mvpOf(w: World): number {
+export function mvpOf(w: World, pts?: Map<number, number>): number {
   let best = -1;
   let bestS = -1;
   for (const a of w.actors) {
-    const s = score(a);
+    const s = scoreOf(a, pts);
     if (s > bestS) {
       bestS = s;
       best = a.id;
@@ -220,21 +222,28 @@ export function mvpOf(w: World): number {
   return bestS > 0 ? best : -1;
 }
 
-export function scoreboard(w: World, scoreTxt: [number, number], humanId: number, title = 'SCOREBOARD'): HTMLElement {
-  const mvp = mvpOf(w);
+export function scoreboard(w: World, scoreTxt: [number, number], humanId: number, title = 'SCOREBOARD', pts?: Map<number, number>): HTMLElement {
+  const mvp = mvpOf(w, pts);
   const head = () => h('div', { class: 'sb-row head' }, h('span'), h('span', { class: 'sb-name' }, 'OPERATOR'), h('span', {}, 'SCORE'), h('span', {}, 'K'), h('span', {}, 'D'), h('span', {}, 'A'));
   const side = (t: 0 | 1) => (w.sideOf(t) === 'attack' ? 'ATTACK' : 'DEFENCE');
   return h(
     'div',
     { class: 'scoreboard' },
     h('div', { class: 'sb-title' }, title),
-    h('div', { class: 'sb-team own' }, h('div', { class: 'sb-th' }, `YOUR SQUAD · ${side(0)}`, h('b', {}, String(scoreTxt[0]))), head(), ...boardRows(w, 0, humanId, mvp)),
-    h('div', { class: 'sb-team foe' }, h('div', { class: 'sb-th' }, `OPPONENTS · ${side(1)}`, h('b', {}, String(scoreTxt[1]))), head(), ...boardRows(w, 1, humanId, mvp)),
+    h('div', { class: 'sb-team own' }, h('div', { class: 'sb-th' }, `YOUR SQUAD · ${side(0)}`, h('b', {}, String(scoreTxt[0]))), head(), ...boardRows(w, 0, humanId, mvp, pts)),
+    h('div', { class: 'sb-team foe' }, h('div', { class: 'sb-th' }, `OPPONENTS · ${side(1)}`, h('b', {}, String(scoreTxt[1]))), head(), ...boardRows(w, 1, humanId, mvp, pts)),
   );
 }
 
-export function roundEndScreen(cfg: { win: boolean; reason: string; highlight: string; w: World; score: [number, number]; humanId: number; nextLabel: string }, on: { next: () => void }): HTMLElement {
-  const mvp = cfg.w.actor(mvpOf(cfg.w));
+export interface RoundPerf {
+  points: number;
+  rank: string;
+  medals: Array<{ id: string; name: string; desc: string }>;
+}
+
+export function roundEndScreen(cfg: { win: boolean; reason: string; highlight: string; w: World; score: [number, number]; humanId: number; nextLabel: string; pts?: Map<number, number>; perf?: RoundPerf }, on: { next: () => void }): HTMLElement {
+  const mvp = cfg.w.actor(mvpOf(cfg.w, cfg.pts));
+  const perf = cfg.perf;
   return h(
     'div',
     { class: `roundend ${cfg.win ? 'win' : 'lose'}` },
@@ -242,19 +251,31 @@ export function roundEndScreen(cfg: { win: boolean; reason: string; highlight: s
     h(
       'div',
       { class: 're-mid' },
-      mvp ? h('div', { class: 're-mvp' }, h('div', { class: 'os-label' }, 'ROUND MVP'), figureCanvas(mvp.look, 3), h('div', { class: 're-mvp-name' }, mvp.name), h('div', { class: 'fine' }, `${mvp.kills} K · ${mvp.assists} A · ${mvp.damageDealt} DMG`)) : null,
-      h('div', { class: 're-board' }, scoreboard(cfg.w, cfg.score, cfg.humanId, `SCORE ${cfg.score[0]} – ${cfg.score[1]}`), cfg.highlight ? h('div', { class: 're-high' }, cfg.highlight) : null),
+      perf
+        ? h(
+            'div',
+            { class: 're-perf' },
+            h('div', { class: 'os-label' }, 'YOUR ROUND'),
+            h('div', { class: `re-rank r-${perf.rank}` }, perf.rank),
+            h('div', { class: 're-pts' }, `${perf.points}`, h('small', {}, ' PTS')),
+            h('div', { class: 're-medals' }, ...perf.medals.slice(0, 4).map((m) => h('div', { class: `medal m-${m.id}`, title: m.desc }, m.name))),
+            mvp ? h('div', { class: 'fine' }, `MVP · ${mvp.name}`) : null,
+          )
+        : mvp
+          ? h('div', { class: 're-mvp' }, h('div', { class: 'os-label' }, 'ROUND MVP'), figureCanvas(mvp.look, 3), h('div', { class: 're-mvp-name' }, mvp.name), h('div', { class: 'fine' }, `${mvp.kills} K · ${mvp.assists} A · ${mvp.damageDealt} DMG`))
+          : null,
+      h('div', { class: 're-board' }, scoreboard(cfg.w, cfg.score, cfg.humanId, `SCORE ${cfg.score[0]} – ${cfg.score[1]}`, cfg.pts), cfg.highlight ? h('div', { class: 're-high' }, cfg.highlight) : null),
     ),
     h('button', { class: 'cta', onclick: on.next }, cfg.nextLabel),
   );
 }
 
-export function matchEndScreen(cfg: { win: boolean; score: [number, number]; lines: Array<{ side: string; won: boolean; reason: string }>; totals: Array<{ name: string; look: string; k: number; d: number; a: number; me: boolean }> }, on: { rematch: () => void; home: () => void }): HTMLElement {
+export function matchEndScreen(cfg: { win: boolean; score: [number, number]; lines: Array<{ side: string; won: boolean; reason: string }>; totals: Array<{ name: string; look: string; k: number; d: number; a: number; me: boolean }>; points?: number }, on: { rematch: () => void; home: () => void }): HTMLElement {
   return h(
     'div',
     { class: `matchend ${cfg.win ? 'win' : 'lose'}` },
     h('div', { class: 'me-title' }, cfg.win ? 'VICTORY' : 'DEFEAT'),
-    h('div', { class: 'me-score' }, `${cfg.score[0]} – ${cfg.score[1]}`),
+    h('div', { class: 'me-score' }, `${cfg.score[0]} – ${cfg.score[1]}`, cfg.points !== undefined ? h('small', { class: 'me-pts' }, ` · ${cfg.points.toLocaleString()} PTS`) : null),
     h(
       'div',
       { class: 'me-body' },

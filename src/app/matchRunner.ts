@@ -20,6 +20,7 @@ import type { World } from '../sim/world';
 import type { ActorIntent, Vec } from '../sim/types';
 import type { Order } from '../ai/brain';
 import { setAutopilot } from '../ai/control';
+import { ScoreTracker } from './scoring';
 
 type State = 'loading' | 'opselect' | 'spawn' | 'playing' | 'dead' | 'takeover' | 'spectate' | 'roundend' | 'matchend' | 'paused';
 
@@ -56,6 +57,10 @@ export class MatchRunner implements Runner {
   private roundEndAt = -1;
   private camIdx = 0;
   private hitstop = 0;
+  private scoring = new ScoreTracker();
+  /** points earned by whoever the player was controlling, this round and this match */
+  private playerPts = 0;
+  private matchPts = 0;
   private hints: Hint[] = [];
   private lastPick: RoundPick | null = null;
   private keyHandler = (e: KeyboardEvent) => this.onKey(e);
@@ -221,6 +226,8 @@ export class MatchRunner implements Runner {
     this.input.controls.reset();
     this.callouts.clear();
     this.fb.reset();
+    this.scoring.newRound();
+    this.playerPts = 0;
     this.deadAt = -1;
     this.takeoverAuto = -1;
     this.roundEndAt = -1;
@@ -303,7 +310,10 @@ export class MatchRunner implements Runner {
     this.setOverlay(null);
     const win = w.result.winner === 0;
     const last = m.matchOver;
-    const el = S.roundEndScreen({ win, reason: REASON_TEXT[w.result.reason] ?? w.result.reason, highlight: this.fb.highlight(w), w, score: m.score, humanId: w.human()?.id ?? -1, nextLabel: last ? 'MATCH RESULTS' : 'NEXT ROUND' }, { next: () => this.nextRound() });
+    const pts = this.scoring.pointsMap();
+    const hid = w.human()?.id ?? -1;
+    const perf = { points: this.playerPts, rank: ScoreTracker.rank(this.playerPts), medals: this.scoring.medals(w, hid, S.mvpOf(w, pts)) };
+    const el = S.roundEndScreen({ win, reason: REASON_TEXT[w.result.reason] ?? w.result.reason, highlight: this.fb.highlight(w), w, score: m.score, humanId: hid, nextLabel: last ? 'MATCH RESULTS' : 'NEXT ROUND', pts, perf }, { next: () => this.nextRound() });
     this.setScreen(el);
     const token = w;
     window.setTimeout(() => {
@@ -329,6 +339,8 @@ export class MatchRunner implements Runner {
     const m = this.match;
     this.click('confirm');
     this.accumulate(m.world);
+    this.matchPts += this.playerPts;
+    this.playerPts = 0;
     if (m.matchOver) return this.showMatchEnd();
     m.nextRound();
     this.showOpSelect();
@@ -348,13 +360,15 @@ export class MatchRunner implements Runner {
     const lines = m.rounds.map((r) => ({ side: r.playerSide === 'attack' ? 'ATTACK' : 'DEFENCE', won: r.winner === 0, reason: REASON_TEXT[r.reason] ?? r.reason }));
     this.setScreen(
       S.matchEndScreen(
-        { win, score: m.score, lines, totals: [...this.totals.values()].sort((a, b) => b.k - a.k) },
+        { win, score: m.score, lines, totals: [...this.totals.values()].sort((a, b) => b.k - a.k), points: this.matchPts },
         {
           rematch: () => {
             this.click('confirm');
             const cfg = { ...this.opts.cfg, seed: (Math.random() * 1e9) >>> 0 };
             this.match = new Match(cfg);
             this.totals.clear();
+            this.matchPts = 0;
+            this.scoring = new ScoreTracker();
             this.lastPick = null;
             this.showOpSelect();
           },
@@ -418,7 +432,7 @@ export class MatchRunner implements Runner {
   private toggleBoard() {
     if (this.board) return this.closeBoard();
     const w = this.match.world;
-    this.board = h('div', { class: 'board-pop' }, S.scoreboard(w, this.match.score, w.human()?.id ?? -1));
+    this.board = h('div', { class: 'board-pop' }, S.scoreboard(w, this.match.score, w.human()?.id ?? -1, 'SCOREBOARD', this.scoring.pointsMap()));
     this.board.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       this.closeBoard();
@@ -584,6 +598,7 @@ export class MatchRunner implements Runner {
     this.hud.setMode(drone ? 'drone' : this.state === 'dead' || this.state === 'takeover' ? 'dead' : this.state === 'spectate' ? 'spectate' : 'play');
     this.hud.root.classList.toggle('previewing', this.input.controls.gadget.active);
     const interact = human && human.alive && !drone ? bestInteract(w, human) : null;
+    this.hud.setPoints(this.playerPts);
     this.hud.update({ w, humanId, score: m.score, round: m.roundIndex, statuses: this.statuses(), interact, gadget: drone ? null : this.input.gadgetUi(), ads: !!human?.ads, drone: drone?.ui ?? null });
     this.updateHints(w);
   }
@@ -614,6 +629,18 @@ export class MatchRunner implements Runner {
     this.ctx.view.onEvents(events);
     this.fb.handle(w, events);
     this.callouts.onTick(w, events, w.human()?.id ?? -1, this.statuses());
+    this.scoring.handle(w, events);
+    const hid = w.human()?.id ?? -1;
+    for (const aw of this.scoring.awards)
+      if (aw.actorId === hid) {
+        this.playerPts += aw.points;
+        this.hud.pointsPop(aw.label, aw.points, aw.combo);
+      }
+    for (const an of this.scoring.announces) {
+      const own = w.actor(an.actorId)?.team === 0;
+      this.hud.announce(an.text, an.sub, own ? an.tier : 1, !own);
+      this.ctx.sfx.play(own ? (`stinger${an.tier}` as 'stinger1') : 'stinger1', { volume: own ? 1 : 0.5 });
+    }
     if (ended) {
       const win = w.result!.winner === 0;
       // last kill of the round gets the slow-motion close-up

@@ -112,6 +112,10 @@ export class Hud {
   private elimEl: HTMLElement;
   private hurtEl: HTMLElement;
   private popEl: HTMLElement;
+  private comboEl: HTMLElement;
+  private comboTimer = 0;
+  private ptsEl: HTMLElement;
+  private announceEl: HTMLElement;
   private interactRing: ReturnType<typeof ring>;
   private gadgetRing: ReturnType<typeof ring>;
   private tagRing: ReturnType<typeof ring>;
@@ -183,8 +187,11 @@ export class Hud {
     this.elimEl = h('div', { class: 'elim' });
     this.hurtEl = h('div', { class: 'hurt-flash' });
     this.popEl = h('div', { class: 'kill-pops' });
+    this.comboEl = h('div', { class: 'combo' });
+    this.ptsEl = h('div', { class: 'pts-chip' }, '0 PTS');
+    this.announceEl = h('div', { class: 'announcer' });
 
-    this.root.append(this.touch, this.droneCam, this.hurtEl, this.popEl, this.vignette, this.dmg, this.moveStick, this.aimStick, top, sys, this.feed, this.vitals, this.cluster, this.toastEl, this.cancelZone, this.hintEl, this.elimEl);
+    this.root.append(this.touch, this.droneCam, this.hurtEl, this.popEl, this.comboEl, this.ptsEl, this.announceEl, this.vignette, this.dmg, this.moveStick, this.aimStick, top, sys, this.feed, this.vitals, this.cluster, this.toastEl, this.cancelZone, this.hintEl, this.elimEl);
     parent.appendChild(this.root);
     this.setMode('play');
   }
@@ -239,13 +246,33 @@ export class Hud {
     el.style.opacity = '0';
   }
 
-  /** "ELIMINATED NAME +100" stack beside the crosshair area */
-  killPop(name: string, points: number, headline = 'ELIMINATED') {
-    const el = h('div', { class: 'kpop' }, h('b', {}, headline), ` ${name} `, h('em', {}, `+${points}`));
+  /** Arcade point popup ("ELIMINATED DEX +125") with the current combo. */
+  pointsPop(label: string, points: number, combo: number) {
+    const big = label.startsWith('ELIMINATED') || points >= 100;
+    const el = h('div', { class: `kpop ${big ? 'big' : ''}` }, h('b', {}, label), ' ', h('em', {}, `+${points}`));
     this.popEl.appendChild(el);
-    while (this.popEl.children.length > 3) this.popEl.firstElementChild?.remove();
+    while (this.popEl.children.length > 4) this.popEl.firstElementChild?.remove();
     setTimeout(() => el.classList.add('out'), 1500);
     setTimeout(() => el.remove(), 1900);
+    this.comboEl.textContent = combo >= 2 ? `COMBO ×${Math.min(2, 1 + (combo - 1) * 0.25).toFixed(2).replace(/0$/, '')}` : '';
+    this.comboEl.classList.remove('pulse');
+    void this.comboEl.offsetWidth;
+    if (combo >= 2) this.comboEl.classList.add('pulse');
+    clearTimeout(this.comboTimer);
+    this.comboTimer = window.setTimeout(() => (this.comboEl.textContent = ''), 5000);
+  }
+
+  setPoints(n: number) {
+    this.set('pts', String(n), () => (this.ptsEl.textContent = `${n.toLocaleString()} PTS`));
+  }
+
+  /** Announcer banner: FIRST BLOOD, DOUBLE KILL, ACE, CLUTCH ... enemy ones read smaller and red. */
+  announce(text: string, sub: string, tier: 1 | 2 | 3, enemy: boolean) {
+    const el = h('div', { class: `announce t${tier} ${enemy ? 'enemy' : ''}` }, h('div', { class: 'an-main' }, enemy ? `ENEMY ${text}` : text), sub ? h('div', { class: 'an-sub' }, sub) : null);
+    this.announceEl.innerHTML = '';
+    this.announceEl.appendChild(el);
+    setTimeout(() => el.classList.add('out'), 1400 + tier * 300);
+    setTimeout(() => el.remove(), 1900 + tier * 300);
   }
 
   banner(text: string, sub = '', ms = 1600, cls = '') {

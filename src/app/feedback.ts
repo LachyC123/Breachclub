@@ -163,7 +163,6 @@ export class Feedback {
             this.stats.humanKills++;
             this.sfx.play('kill_confirm');
             this.onHumanKill();
-            this.hud.killPop(a.name, 100);
           }
           if (a && a.id === human?.id) this.onHumanDeath(e.killerId);
           break;

@@ -13,6 +13,7 @@ import { World } from '../sim/world';
 import { RANGE_TARGETS } from '../content/rangeMap';
 import { bestInteract } from '../sim/interact';
 import type { OpSelectResult } from '../ui/screens';
+import { ScoreTracker } from './scoring';
 
 const RANGE_OPS = ['ram', 'recruit_mo', 'recruit_tess', 'hinge', 'recruit_dex', 'recruit_june'];
 
@@ -32,6 +33,8 @@ export class RangeRunner implements Runner {
   private elims = 0;
   private lastCount = '';
   private hitstop = 0;
+  private scoring = new ScoreTracker();
+  private pts = 0;
 
   constructor(private ctx: AppCtx) {
     this.hud = new Hud(ctx.ui);
@@ -83,6 +86,8 @@ export class RangeRunner implements Runner {
     this.ctx.view.fit();
     this.shots = 0;
     this.hits = 0;
+    this.scoring = new ScoreTracker();
+    this.pts = 0;
     this.elims = 0;
     this.lastCount = '';
   }
@@ -178,6 +183,7 @@ export class RangeRunner implements Runner {
     view.render(this.stepper.alpha, dt, { humanId: human?.id ?? -1, preview: playing ? this.input.preview() : { kind: 'none' }, focus: null, droneId: null, ads: playing && !!human?.ads, laser: playing ? human!.facing : null });
     if (this.state === 'select') return;
     this.hud.root.classList.toggle('previewing', this.input.controls.gadget.active);
+    this.hud.setPoints(this.pts);
     this.hud.update({ w, humanId: human?.id ?? -1, score: [0, 0], round: 0, statuses: new Map(), interact: human ? bestInteract(w, human) : null, gadget: this.input.gadgetUi(), ads: !!human?.ads, drone: null, range: true });
     const acc = this.shots ? Math.round((this.hits / this.shots) * 100) : 0;
     const txt = `${this.shots}|${this.hits}|${this.elims}`;
@@ -206,5 +212,15 @@ export class RangeRunner implements Runner {
     if (shot && hit) this.hits++;
     this.ctx.view.onEvents(w.events);
     this.fb.handle(w, w.events);
+    this.scoring.handle(w, w.events);
+    for (const aw of this.scoring.awards)
+      if (aw.actorId === h?.id) {
+        this.pts += aw.points;
+        this.hud.pointsPop(aw.label, aw.points, aw.combo);
+      }
+    for (const an of this.scoring.announces) if (an.actorId === h?.id) {
+      this.hud.announce(an.text, an.sub, an.tier, false);
+      this.ctx.sfx.play(`stinger${an.tier}` as 'stinger1');
+    }
   }
 }
