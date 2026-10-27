@@ -1,53 +1,63 @@
-// Touch (floating twin sticks + gadget drag) and desktop (WASD + mouse) input.
-// Each pointer is tracked independently; everything resets on cancel, blur, rotation, death.
+// CODM-style touch controls plus keyboard/mouse.
+//  - left half: floating move stick
+//  - right half: floating AIM stick (aims, never fires)
+//  - FIRE button: hold to shoot; drag the thumb off it to steer aim while firing
+//  - ADS toggle, Gadget (press-drag-release preview, tap for second action), Interact (hold), Reload
+// Every pointer is tracked independently; everything resets on cancel, blur, rotation and death.
 import type { ActorIntent, GadgetCommand, Vec } from '../sim/types';
 import { emptyIntent } from '../sim/types';
 
-export type GadgetMode = 'ram' | 'hinge' | 'none';
-
 export interface GadgetPreview {
   active: boolean;
-  /** screen-space drag vector from the gadget button (or mouse world point on desktop) */
+  /** screen-space drag vector from the gadget button (or mouse offset on desktop) */
   dir: Vec;
   /** desktop: world target in tiles */
   worldTarget: Vec | null;
   overCancel: boolean;
 }
 
-const STICK_R = 60;
-const AIM_DEADZONE = 14;
+const STICK_R = 58;
+const AIM_DEADZONE = 10;
+const FIRE_AIM_DEADZONE = 18;
 
 export class Controls {
   move: Vec = { x: 0, y: 0 };
   aim: number | null = null;
   firing = false;
+  ads = false;
   interactHeld = false;
   private reloadTap = false;
+  private tagTap = false;
   private gadgetCmd: GadgetCommand | null = null;
   gadget: GadgetPreview = { active: false, dir: { x: 0, y: 0 }, worldTarget: null, overCancel: false };
-  /** set by App: decides what a gadget press means right now */
+  /** set by the runner: decides what a gadget press means right now */
   gadgetTapAction: () => GadgetCommand | null = () => null;
   gadgetCommitAction: (p: GadgetPreview) => GadgetCommand | null = () => null;
   gadgetPreviewAllowed: () => boolean = () => false;
   onAnyInput: () => void = () => {};
   usingTouch = false;
-  /** analytic flags for tutorial hints */
+  /** true while the right stick or fire-drag is actively steering aim this frame */
+  aimingActive = false;
   movedOnce = false;
   aimedOnce = false;
+  firedOnce = false;
 
   private movePtr: number | null = null;
   private moveOrigin: Vec = { x: 0, y: 0 };
   private aimPtr: number | null = null;
   private aimOrigin: Vec = { x: 0, y: 0 };
+  private firePtr: number | null = null;
+  private fireOrigin: Vec = { x: 0, y: 0 };
   private gadgetPtr: number | null = null;
   private gadgetOrigin: Vec = { x: 0, y: 0 };
   private gadgetDownAt = 0;
   private keys = new Set<string>();
-  private mouse = { x: 0, y: 0, down: false, inside: false };
+  private mouse = { x: 0, y: 0, down: false, right: false, inside: false };
   private qHeld = false;
-  /** world position under the mouse, supplied by App each frame */
+  /** world position under the mouse, supplied each frame */
   mouseWorld: Vec | null = null;
   playerScreen: Vec = { x: 0, y: 0 };
+  private disposers: Array<() => void> = [];
 
   constructor(
     layer: HTMLElement,
@@ -55,18 +65,69 @@ export class Controls {
     private aimStick: HTMLElement,
     private cancelZone: HTMLElement,
   ) {
-    layer.addEventListener('pointerdown', this.onDown);
-    window.addEventListener('pointermove', this.onMove, { passive: false });
-    window.addEventListener('pointerup', this.onUp);
-    window.addEventListener('pointercancel', this.onUp);
-    window.addEventListener('blur', () => this.reset());
-    window.addEventListener('keydown', this.onKey);
-    window.addEventListener('keyup', this.onKeyUp);
-    layer.addEventListener('contextmenu', (e) => e.preventDefault());
-    window.addEventListener('orientationchange', () => this.reset());
+    const on = <K extends keyof WindowEventMap>(t: EventTarget, type: K | string, fn: (e: never) => void, opts?: AddEventListenerOptions) => {
+      t.addEventListener(type, fn as EventListener, opts);
+      this.disposers.push(() => t.removeEventListener(type, fn as EventListener, opts));
+    };
+    on(layer, 'pointerdown', this.onDown);
+    on(window, 'pointermove', this.onMove, { passive: false });
+    on(window, 'pointerup', this.onUp);
+    on(window, 'pointercancel', this.onUp);
+    on(window, 'blur', () => this.reset());
+    on(window, 'keydown', this.onKey);
+    on(window, 'keyup', this.onKeyUp);
+    on(layer, 'contextmenu', (e: Event) => e.preventDefault());
+    on(window, 'orientationchange', () => this.reset());
   }
 
-  /** Attach press-and-hold / drag behaviour to an action button. */
+  dispose() {
+    for (const d of this.disposers) d();
+    this.disposers = [];
+  }
+
+  // ---------- buttons ----------
+
+  bindFireButton(el: HTMLElement) {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.onAnyInput();
+      this.usingTouch = e.pointerType === 'touch';
+      if (this.firePtr !== null) return;
+      this.firePtr = e.pointerId;
+      const r = el.getBoundingClientRect();
+      this.fireOrigin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      this.firing = true;
+      this.firedOnce = true;
+      el.classList.add('pressed');
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* capture unsupported */
+      }
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== this.firePtr) return;
+      const dx = e.clientX - this.fireOrigin.x;
+      const dy = e.clientY - this.fireOrigin.y;
+      if (Math.hypot(dx, dy) > FIRE_AIM_DEADZONE) {
+        this.aim = Math.atan2(dy, dx);
+        this.aimingActive = true;
+        this.aimedOnce = true;
+      }
+    });
+    const end = (e: PointerEvent) => {
+      if (e.pointerId !== this.firePtr) return;
+      this.firePtr = null;
+      this.firing = false;
+      this.aimingActive = this.aimPtr !== null;
+      el.classList.remove('pressed');
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('lostpointercapture', end);
+  }
+
   bindGadgetButton(el: HTMLElement) {
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -86,7 +147,7 @@ export class Controls {
       try {
         el.setPointerCapture(e.pointerId);
       } catch {
-        /* capture not supported */
+        /* ignore */
       }
     });
     el.addEventListener('pointermove', (e) => {
@@ -154,6 +215,14 @@ export class Controls {
     this.reloadTap = true;
   }
 
+  requestTag() {
+    this.tagTap = true;
+  }
+
+  toggleAds() {
+    this.ads = !this.ads;
+  }
+
   private endPreview() {
     this.gadget = { active: false, dir: { x: 0, y: 0 }, worldTarget: null, overCancel: false };
     this.cancelZone.style.display = 'none';
@@ -165,22 +234,27 @@ export class Controls {
     this.gadgetPtr = null;
   }
 
+  // ---------- touch layer (sticks) and mouse ----------
+
   private onDown = (e: PointerEvent) => {
     e.preventDefault();
     this.onAnyInput();
-    const left = e.clientX < window.innerWidth * 0.45;
     if (e.pointerType === 'mouse') {
       this.usingTouch = false;
       if (e.button === 0) {
         this.mouse.down = true;
-        this.firing = !this.gadget.active;
+        this.firedOnce = true;
       }
-      if (e.button === 2 && this.gadget.active) this.cancelPreview();
+      if (e.button === 2) {
+        if (this.gadget.active) this.cancelPreview();
+        else this.mouse.right = true;
+      }
       return;
     }
     this.usingTouch = true;
     const leftHanded = document.body.classList.contains('left-handed');
-    const isMoveSide = leftHanded ? !left && e.clientX > window.innerWidth * 0.55 : left;
+    const half = window.innerWidth * 0.45;
+    const isMoveSide = leftHanded ? e.clientX > window.innerWidth - half : e.clientX < half;
     if (isMoveSide && this.movePtr === null) {
       this.movePtr = e.pointerId;
       this.moveOrigin = { x: e.clientX, y: e.clientY };
@@ -201,51 +275,44 @@ export class Controls {
     }
     if (e.pointerId === this.movePtr) {
       e.preventDefault();
-      let dx = e.clientX - this.moveOrigin.x;
-      let dy = e.clientY - this.moveOrigin.y;
-      const d = Math.hypot(dx, dy);
-      if (d > STICK_R) {
-        // floating stick follows the thumb when dragged past its rim
-        this.moveOrigin.x += (dx / d) * (d - STICK_R);
-        this.moveOrigin.y += (dy / d) * (d - STICK_R);
-        dx = (dx / d) * STICK_R;
-        dy = (dy / d) * STICK_R;
-        this.showStick(this.moveStick, this.moveOrigin.x, this.moveOrigin.y);
-      }
-      const m = Math.hypot(dx, dy) / STICK_R;
+      const v = this.stickVector(this.moveStick, this.moveOrigin, e);
+      const m = Math.hypot(v.x, v.y) / STICK_R;
       const dead = 0.12;
       const mag = m < dead ? 0 : Math.min(1, (m - dead) / (1 - dead));
-      const len = Math.hypot(dx, dy) || 1;
-      this.move = { x: (dx / len) * mag, y: (dy / len) * mag };
+      const len = Math.hypot(v.x, v.y) || 1;
+      this.move = { x: (v.x / len) * mag, y: (v.y / len) * mag };
       if (mag > 0.3) this.movedOnce = true;
-      this.knob(this.moveStick, dx, dy);
     } else if (e.pointerId === this.aimPtr) {
       e.preventDefault();
-      let dx = e.clientX - this.aimOrigin.x;
-      let dy = e.clientY - this.aimOrigin.y;
-      const d = Math.hypot(dx, dy);
-      if (d > STICK_R) {
-        this.aimOrigin.x += (dx / d) * (d - STICK_R);
-        this.aimOrigin.y += (dy / d) * (d - STICK_R);
-        dx = (dx / d) * STICK_R;
-        dy = (dy / d) * STICK_R;
-        this.showStick(this.aimStick, this.aimOrigin.x, this.aimOrigin.y);
-      }
-      if (Math.hypot(dx, dy) > AIM_DEADZONE) {
-        this.aim = Math.atan2(dy, dx);
-        this.firing = !this.gadget.active;
+      const v = this.stickVector(this.aimStick, this.aimOrigin, e);
+      if (Math.hypot(v.x, v.y) > AIM_DEADZONE) {
+        this.aim = Math.atan2(v.y, v.x);
+        this.aimingActive = true;
         this.aimedOnce = true;
       }
-      this.knob(this.aimStick, dx, dy);
     }
   };
 
+  /** floating stick: the base follows the thumb when it is dragged past the rim */
+  private stickVector(el: HTMLElement, origin: Vec, e: PointerEvent): Vec {
+    let dx = e.clientX - origin.x;
+    let dy = e.clientY - origin.y;
+    const d = Math.hypot(dx, dy);
+    if (d > STICK_R) {
+      origin.x += (dx / d) * (d - STICK_R);
+      origin.y += (dy / d) * (d - STICK_R);
+      dx = (dx / d) * STICK_R;
+      dy = (dy / d) * STICK_R;
+      this.showStick(el, origin.x, origin.y);
+    }
+    this.knob(el, dx, dy);
+    return { x: dx, y: dy };
+  }
+
   private onUp = (e: PointerEvent) => {
     if (e.pointerType === 'mouse') {
-      if (e.button === 0) {
-        this.mouse.down = false;
-        this.firing = false;
-      }
+      if (e.button === 0) this.mouse.down = false;
+      if (e.button === 2) this.mouse.right = false;
       return;
     }
     if (e.pointerId === this.movePtr) {
@@ -254,7 +321,7 @@ export class Controls {
       this.moveStick.style.display = 'none';
     } else if (e.pointerId === this.aimPtr) {
       this.aimPtr = null;
-      this.firing = false;
+      this.aimingActive = this.firePtr !== null;
       this.aimStick.style.display = 'none';
     }
   };
@@ -267,6 +334,7 @@ export class Controls {
     this.onAnyInput();
     if (k === 'r') this.reloadTap = true;
     if (k === 'e') this.interactHeld = true;
+    if (k === 'f') this.tagTap = true;
     if (k === 'q') {
       this.qHeld = true;
       this.gadgetDownAt = performance.now();
@@ -302,7 +370,7 @@ export class Controls {
     if (i) i.style.transform = `translate(${dx}px, ${dy}px)`;
   }
 
-  /** desktop keyboard escape cancels a gadget preview; returns true if consumed */
+  /** desktop Escape cancels a gadget preview; returns true if consumed */
   escape(): boolean {
     if (this.gadget.active) {
       this.cancelPreview();
@@ -310,10 +378,6 @@ export class Controls {
       return true;
     }
     return false;
-  }
-
-  isKeyDown(k: string) {
-    return this.keys.has(k);
   }
 
   /** Build this tick's intent. Desktop keys/mouse merge with touch. */
@@ -332,9 +396,13 @@ export class Controls {
     }
     if (m > 0.3) this.movedOnce = true;
     it.move = { x: mx, y: my };
+    let fire = this.firing;
+    let ads = this.ads;
     if (!this.usingTouch && this.mouse.inside) {
       this.aim = Math.atan2(this.mouse.y - this.playerScreen.y, this.mouse.x - this.playerScreen.x);
-      this.firing = this.mouse.down && !this.gadget.active;
+      this.aimingActive = true;
+      fire = fire || this.mouse.down;
+      ads = ads || this.mouse.right || this.keys.has('shift');
       if (this.mouse.down) this.aimedOnce = true;
       if (this.gadget.active) {
         this.gadget.worldTarget = this.mouseWorld;
@@ -342,7 +410,8 @@ export class Controls {
       }
     }
     it.aim = this.aim;
-    it.fire = this.firing && !this.gadget.active;
+    it.fire = fire && !this.gadget.active;
+    it.ads = ads;
     it.interact = this.interactHeld;
     it.reload = this.reloadTap;
     this.reloadTap = false;
@@ -351,25 +420,33 @@ export class Controls {
     return it;
   }
 
+  /** consume a pending drone tag request */
+  takeTag(): boolean {
+    const t = this.tagTap;
+    this.tagTap = false;
+    return t;
+  }
+
   /** Clear every held input (takeover, pause, app switch): no held trigger survives. */
   reset() {
     this.move = { x: 0, y: 0 };
     this.firing = false;
     this.interactHeld = false;
     this.reloadTap = false;
+    this.tagTap = false;
     this.gadgetCmd = null;
     this.movePtr = null;
     this.aimPtr = null;
+    this.firePtr = null;
     this.gadgetPtr = null;
+    this.aimingActive = false;
     this.mouse.down = false;
+    this.mouse.right = false;
     this.keys.clear();
     this.qHeld = false;
     this.moveStick.style.display = 'none';
     this.aimStick.style.display = 'none';
     this.endPreview();
-  }
-
-  get stickRadius() {
-    return STICK_R;
+    document.querySelectorAll('.act.pressed').forEach((el) => el.classList.remove('pressed'));
   }
 }

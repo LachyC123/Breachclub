@@ -150,7 +150,7 @@ describe('restart hygiene', () => {
     expect(snap(a)).toBe(snap(b));
     for (let i = 0; i < 20; i++) {
       const w = makeWorld({ seed: 9 });
-      expect(w.entities.map((e) => e.kind)).toEqual(['puck']);
+      expect(w.entities.map((e) => e.kind)).toEqual([]);
       expect(w.events.length).toBe(0);
       expect(snap(w)).toBe(snap(a));
     }

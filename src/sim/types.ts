@@ -55,8 +55,10 @@ export interface ActorIntent {
   interact: boolean;
   reload: boolean;
   gadget: GadgetCommand | null;
-  /** prep only: drive the shared scouting puck instead of walking */
-  puck: Vec | null;
+  /** aiming down sights: slower movement, tighter spread */
+  ads: boolean;
+  /** prep only (attackers): drive your active drone and tag what it sees */
+  drone: { move: Vec; tag: boolean } | null;
 }
 
 export const emptyIntent = (): ActorIntent => ({
@@ -66,7 +68,8 @@ export const emptyIntent = (): ActorIntent => ({
   interact: false,
   reload: false,
   gadget: null,
-  puck: null,
+  ads: false,
+  drone: null,
 });
 
 export interface Actor {
@@ -106,6 +109,15 @@ export interface Actor {
   lastDamagedTick: number;
   lastDamagedBy: number;
   kills: number;
+  deaths: number;
+  assists: number;
+  damageDealt: number;
+  /** recon drones left to deploy this round (attackers) */
+  drones: number;
+  tagReadyTick: number;
+  ads: boolean;
+  /** who damaged this actor this round (for assists) */
+  damagedBy: number[];
   vaulting: { from: Vec; to: Vec; startTick: number; endTick: number } | null;
 }
 
@@ -191,19 +203,27 @@ export interface ChargeEntity {
   detonateTick: number;
 }
 
-/** Shared attacker scouting puck (prep only). Sees through doors, never through walls. */
-export interface PuckEntity {
-  kind: 'puck';
+/** Attacker recon drone (prep only). Sees through doors, never through walls; one bullet kills it. */
+export interface DroneEntity {
+  kind: 'drone';
   id: number;
   team: TeamId;
   ownerId: number;
+  /** 1 or 2: which of the owner's drones this is */
+  slot: number;
   pos: Vec;
+  heading: number;
   hp: number;
-  driverId: number;
   stepAccum: number;
 }
 
-export type Entity = SledEntity | CoverEntity | HingeEntity | ChargeEntity | PuckEntity;
+export type Entity = SledEntity | CoverEntity | HingeEntity | ChargeEntity | DroneEntity;
+
+export interface TagMark {
+  pos: Vec;
+  untilTick: number;
+  byId: number;
+}
 
 export interface SoundEvent {
   id: number;
@@ -261,8 +281,10 @@ export type SimEvent =
   | { type: 'hingeBlocked'; id: number; hingeId: number; reason: string; cells: Vec[] }
   | { type: 'hingeDestroyed'; id: number; hingeId: number; pos: Vec }
   | { type: 'chargePlanted'; id: number; chargeId: number; actorId: number }
-  | { type: 'puckDestroyed'; id: number; puckId: number; pos: Vec }
-  | { type: 'puckExpired'; id: number; puckId: number }
+  | { type: 'droneDeployed'; id: number; droneId: number; ownerId: number }
+  | { type: 'droneDestroyed'; id: number; droneId: number; ownerId: number; pos: Vec; by: number }
+  | { type: 'tagged'; id: number; team: TeamId; actorId: number; byId: number }
+  | { type: 'objectiveFound'; id: number; team: TeamId }
   | { type: 'vault'; id: number; actorId: number }
   | { type: 'phase'; id: number; phase: Phase }
   | { type: 'roundEnded'; id: number; winner: TeamId; reason: RoundReason }

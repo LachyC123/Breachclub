@@ -79,8 +79,9 @@ function fire(w: World, a: Actor) {
   a.mag--;
   a.nextShotTick = w.tick + Math.max(1, secs(wpn.interval_seconds));
   const moving = Math.hypot(a.vel.x, a.vel.y) > 0.5 ? 0.025 : 0;
-  const spread = (BASE_SPREAD[wpn.id] ?? 0.03) + a.bloom + moving;
-  a.bloom = Math.min(0.12, a.bloom + (BLOOM_PER_SHOT[wpn.id] ?? 0.02));
+  const adsK = a.ads ? 0.4 : 1;
+  const spread = ((BASE_SPREAD[wpn.id] ?? 0.03) + a.bloom + moving) * adsK;
+  a.bloom = Math.min(0.12, a.bloom + (BLOOM_PER_SHOT[wpn.id] ?? 0.02) * (a.ads ? 0.6 : 1));
   const maxRange = wpn.effective_range_tiles * 2;
   const start = muzzle(a);
   // if the muzzle pokes through a wall, the shot originates (and stops) at the wall face
@@ -146,9 +147,9 @@ function traceBullet(w: World, a: Actor, from: Vec, to: Vec, baseDamage: number)
     tWall = hit.t;
     if (hit.entityId !== null) {
       surface = 'gadget';
-      // during prep only the scouting puck can be damaged
+      // during prep only recon drones can be damaged
       const ent = w.entities.find((e) => e.id === hit.entityId);
-      if (w.phase !== 'prep' || ent?.kind === 'puck') damageEntity(w, hit.entityId, baseDamage, a.id);
+      if (w.phase !== 'prep' || ent?.kind === 'drone') damageEntity(w, hit.entityId, baseDamage, a.id);
     } else if (hit.cell) {
       const ci = hit.cell.y * w.map.w + hit.cell.x;
       const g = w.map.softGroupOf[ci];

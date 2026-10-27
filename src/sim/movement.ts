@@ -141,9 +141,11 @@ export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
       continue;
     }
 
-    // driving the scouting puck: the operator stands still
-    let mx = it.puck ? 0 : it.move.x;
-    let my = it.puck ? 0 : it.move.y;
+    // attackers are on their drones during prep: operators wait at spawn (Siege rules)
+    const droning = w.phase === 'prep' && a.side === 'attack' && w.cfg.mode !== 'range';
+    let mx = droning ? 0 : it.move.x;
+    let my = droning ? 0 : it.move.y;
+    a.ads = it.ads && !droning;
     const mag = Math.hypot(mx, my);
     if (mag > 1) {
       mx /= mag;
@@ -154,7 +156,7 @@ export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
       mx = 0;
       my = 0;
     }
-    let speed = speedBase;
+    let speed = speedBase * (a.ads ? 0.55 : 1);
     if (a.flinchUntil >= w.tick) speed *= 0.7;
     const dx = mx * speed * DT + a.shove.x;
     const dy = my * speed * DT + a.shove.y;

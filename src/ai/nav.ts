@@ -104,13 +104,13 @@ function nearestWalkable(g: NavGrid, p: Vec): number {
  * A* over 8-neighbour cells without corner cutting. With `breachCost`, intact soft panels and
  * barricades become passable at that extra cost (used to plan a breach, never to walk through).
  */
-export function findPath(w: World, side: NavSide, from: Vec, to: Vec, opts: { breachCost?: number; maxNodes?: number } = {}): PathResult | null {
+export function findPath(w: World, side: NavSide, from: Vec, to: Vec, opts: { breachCost?: number; maxNodes?: number; extra?: Float32Array; doorsOnly?: boolean } = {}): PathResult | null {
   const g = navGrid(w, side);
   const start = nearestWalkable(g, from);
   const goal = nearestWalkable(g, to);
   if (start < 0 || goal < 0) return null;
   const n = g.w * g.h;
-  const passable = (i: number) => g.walk[i] === 1 || (opts.breachCost !== undefined && g.breachable[i] >= 0);
+  const passable = (i: number) => g.walk[i] === 1 || (opts.breachCost !== undefined && g.breachable[i] >= (opts.doorsOnly ? 100 : 0));
   const stepCost = (i: number) => (g.walk[i] ? 1 : opts.breachCost ?? 1);
   const gs = new Float32Array(n).fill(Infinity);
   const came = new Int32Array(n).fill(-1);
@@ -165,7 +165,7 @@ export function findPath(w: World, side: NavSide, from: Vec, to: Vec, opts: { br
           const b = ny * g.w + cx;
           if (!g.walk[a] || !g.walk[b] || !g.walk[j]) continue;
         }
-        const c = gs[cur] + (dx && dy ? 1.414 : 1) * stepCost(j);
+        const c = gs[cur] + (dx && dy ? 1.414 : 1) * stepCost(j) + (opts.extra ? opts.extra[j] : 0);
         if (c < gs[j]) {
           gs[j] = c;
           came[j] = cur;

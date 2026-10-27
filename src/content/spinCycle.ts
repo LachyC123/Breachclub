@@ -8,6 +8,8 @@
 //   service window these guarantee two walking routes from the alley to the office.
 //   'M' washing machine   'D' desk   'K' laundry cart   'B' stock shelving
 //   'C' archive console   'T' folding table   'X' street car   'U' bins
+import type { MapDef, RoomDef, EntryPoint } from './mapdef';
+
 export const SPIN_CYCLE_ROWS: readonly string[] = [
   '                                    ', // 0  north alley
   '                                    ', // 1
@@ -39,15 +41,6 @@ export const SPIN_CYCLE_ROWS: readonly string[] = [
   '                                    ', // 27
 ];
 
-export interface RoomDef {
-  id: string;
-  name: string;
-  /** inclusive tile rectangles */
-  rects: Array<[number, number, number, number]>;
-  floor: 'tile' | 'wood' | 'concrete' | 'asphalt' | 'cobble' | 'lino';
-  interior: boolean;
-}
-
 export const SPIN_CYCLE_ROOMS: RoomDef[] = [
   { id: 'office', name: 'Office', rects: [[3, 3, 15, 10]], floor: 'wood', interior: true },
   { id: 'stock', name: 'Stockroom', rects: [[17, 3, 30, 10]], floor: 'concrete', interior: true },
@@ -66,14 +59,6 @@ export const SPIN_CYCLE_ROOMS: RoomDef[] = [
     interior: false,
   },
 ];
-
-export interface EntryPoint {
-  id: string;
-  name: string;
-  room: string;
-  /** tile-space positions for up to three attackers */
-  spots: Array<[number, number]>;
-}
 
 export const SPIN_CYCLE_ENTRIES: EntryPoint[] = [
   { id: 'front', name: 'Front doors', room: 'street', spots: [[17.5, 25.5], [19.5, 26.2], [15.5, 26.2]] },
@@ -106,4 +91,18 @@ export const SPIN_CYCLE_META = {
   } as Record<string, [string, string]>,
   /** service->alley window vault */
   windowRooms: ['alley', 'service'] as [string, string],
+};
+
+export const SPIN_CYCLE: MapDef = {
+  id: SPIN_CYCLE_META.id,
+  name: SPIN_CYCLE_META.name,
+  rows: SPIN_CYCLE_ROWS,
+  rooms: SPIN_CYCLE_ROOMS,
+  entries: SPIN_CYCLE_ENTRIES,
+  defenderSpawns: SPIN_CYCLE_DEFENDER_SPAWNS,
+  objectiveRoom: SPIN_CYCLE_META.objectiveRoom,
+  softGroupRooms: SPIN_CYCLE_META.softGroupRooms,
+  doorRooms: SPIN_CYCLE_META.doorRooms,
+  protectedDoors: ['P', 'Q', 'R'],
+  shell: [2, 2, 31, 22],
 };

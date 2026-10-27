@@ -17,7 +17,8 @@ import {
   raycast,
   type GeoState,
 } from './geometry';
-import type { Actor, ActorIntent, CoverEntity, HingeEntity, Obb, SledEntity, Vec, ChargeEntity, PuckEntity } from './types';
+import type { Actor, ActorIntent, CoverEntity, HingeEntity, Obb, SledEntity, Vec, ChargeEntity, DroneEntity } from './types';
+import { DRONE_VISION } from './perception';
 import type { World } from './world';
 import { ACTOR_RADIUS, moveCircle } from './movement';
 
@@ -86,14 +87,16 @@ export function damageEntity(w: World, id: number, amount: number, by: number) {
       removeEntity(w, e.id);
       w.emit({ type: 'hingeDestroyed', hingeId: e.id, pos: { ...e.center } });
     }
-  } else if (e.kind === 'puck') {
+  } else if (e.kind === 'drone') {
     e.hp -= amount;
     if (e.hp <= 0) {
       removeEntity(w, e.id);
-      w.emit({ type: 'puckDestroyed', puckId: e.id, pos: { ...e.pos } });
+      w.emit({ type: 'droneDestroyed', droneId: e.id, ownerId: e.ownerId, pos: { ...e.pos }, by });
+      // the owner switches straight to their spare drone
+      const owner = w.actor(e.ownerId);
+      if (owner && w.phase === 'prep') deployDrone(w, owner);
     }
   }
-  void by;
 }
 
 function removeEntity(w: World, id: number) {
@@ -617,31 +620,65 @@ function detonateCharge(w: World, c: ChargeEntity) {
 
 // ---------- per-tick entity update ----------
 
-export const PUCK_SPEED = 4;
-export const PUCK_RADIUS = 0.2;
+export const DRONE_SPEED = 5;
+export const DRONE_RADIUS = 0.2;
+export const DRONE_HP = 10;
+export const TAG_SECONDS = 5;
+export const TAG_COOLDOWN = 0.8;
 
-/** Drive the shared scouting puck: the first living attacker sending a drive vector this tick. */
-export function stepPuck(w: World, get: (a: Actor) => ActorIntent) {
-  const puck = w.entities.find((e): e is PuckEntity => e.kind === 'puck');
-  if (!puck) return;
-  puck.driverId = -1;
-  for (const a of w.actors) {
-    if (!a.alive || a.team !== puck.team) continue;
-    const d = get(a).puck;
-    if (!d) continue;
-    puck.driverId = a.id;
-    const m = Math.min(1, Math.hypot(d.x, d.y));
-    if (m < 0.05) break;
-    const len = Math.hypot(d.x, d.y) || 1;
-    const before = { ...puck.pos };
-    moveCircle(w, null, puck.pos, (d.x / len) * m * PUCK_SPEED * DT, (d.y / len) * m * PUCK_SPEED * DT, PUCK_RADIUS, puck.id);
-    puck.stepAccum += Math.hypot(puck.pos.x - before.x, puck.pos.y - before.y);
-    if (puck.stepAccum > 1.5) {
-      puck.stepAccum = 0;
-      w.emitSound(puck.pos, 'gadget', 3, puck.team, a.id);
+/** Deploy the owner's next recon drone at their feet (prep only). */
+export function deployDrone(w: World, a: Actor): DroneEntity | null {
+  if (a.drones <= 0 || !a.alive) return null;
+  const slot = 3 - a.drones;
+  a.drones--;
+  const d: DroneEntity = {
+    kind: 'drone',
+    id: w.newEntityId(),
+    team: a.team,
+    ownerId: a.id,
+    slot,
+    pos: { x: a.pos.x + Math.cos(a.facing) * 0.5, y: a.pos.y + Math.sin(a.facing) * 0.5 },
+    heading: a.facing,
+    hp: DRONE_HP,
+    stepAccum: 0,
+  };
+  w.entities.push(d);
+  w.emit({ type: 'droneDeployed', droneId: d.id, ownerId: a.id });
+  return d;
+}
+
+/** Each attacker drives their own drone; tagging pings every enemy that drone can see. */
+export function stepDrones(w: World, get: (a: Actor) => ActorIntent) {
+  if (w.phase !== 'prep') return;
+  for (const e of [...w.entities]) {
+    if (e.kind !== 'drone') continue;
+    const owner = w.actor(e.ownerId);
+    if (!owner || !owner.alive) continue;
+    const it = get(owner).drone;
+    if (!it) continue;
+    const m = Math.min(1, Math.hypot(it.move.x, it.move.y));
+    if (m > 0.05) {
+      const len = Math.hypot(it.move.x, it.move.y) || 1;
+      const before = { ...e.pos };
+      moveCircle(w, null, e.pos, (it.move.x / len) * m * DRONE_SPEED * DT, (it.move.y / len) * m * DRONE_SPEED * DT, DRONE_RADIUS, e.id);
+      e.heading = Math.atan2(it.move.y, it.move.x);
+      e.stepAccum += Math.hypot(e.pos.x - before.x, e.pos.y - before.y);
+      if (e.stepAccum > 1.5) {
+        e.stepAccum = 0;
+        w.emitSound(e.pos, 'gadget', 3, e.team, owner.id);
+      }
+      w.invalidateObstacles();
     }
-    w.invalidateObstacles();
-    break;
+    if (it.tag && w.tick >= owner.tagReadyTick) {
+      owner.tagReadyTick = w.tick + secs(TAG_COOLDOWN);
+      for (const t of w.actors) {
+        if (!t.alive || t.team === e.team) continue;
+        if (dist(e.pos, t.pos) > DRONE_VISION) continue;
+        if (raycast(w, e.pos, t.pos, 'sight', { obs: w.obstacles(), ignoreEntity: e.id })) continue;
+        w.marks[e.team].set(t.id, { pos: { ...t.pos }, untilTick: w.tick + secs(TAG_SECONDS), byId: owner.id });
+        w.emit({ type: 'tagged', team: e.team, actorId: t.id, byId: owner.id });
+      }
+    }
   }
 }
 

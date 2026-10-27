@@ -1,6 +1,6 @@
 // Authoritative round simulation. Fixed 60Hz steps; presentation reads state + events only.
 import { RULES, secs, weaponById, weaponForOperator, displayName, SQUADMATES, type Side } from '../content/defs';
-import { buildSpinCycle, type MapData } from './mapdata';
+import { buildMap, type MapData, type MapId } from './mapdata';
 import { Rng } from './rng';
 import type { GeoState, ObstacleRef } from './geometry';
 import { obstacles } from './geometry';
@@ -16,6 +16,7 @@ import type {
   SoftPanelState,
   SoftState,
   SoundEvent,
+  TagMark,
   TeamId,
   Vec,
 } from './types';
@@ -23,9 +24,10 @@ import { emptyIntent } from './types';
 import { stepMovement } from './movement';
 import { stepCombat, stepReloads } from './combat';
 import { stepInteractions, completeInteractions } from './interact';
-import { stepGadgetCommands, stepEntities, stepPuck } from './gadgets';
+import { stepGadgetCommands, stepEntities, stepDrones, deployDrone } from './gadgets';
 import { updatePerception, propagateSound } from './perception';
 import { stepRules } from './rules';
+import { stepRange } from './range';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 export type NewEvent = DistributiveOmit<SimEvent, 'id'>;
@@ -45,6 +47,10 @@ export interface RoundConfig {
   /** shorter clocks for tests/tutorial */
   prepSeconds?: number;
   actionSeconds?: number;
+  /** map to load (default Spin Cycle) */
+  mapId?: MapId;
+  /** 'range' never ends: targets respawn and walls regenerate */
+  mode?: 'match' | 'range';
 }
 
 export interface TeamResources {
@@ -102,11 +108,14 @@ export class World implements GeoState {
   sounds: SoundEvent[] = [];
   damagedThisTick = new Set<number>();
   prepReadyRequested = false;
+  /** drone/ping tags per team: enemy id -> marker */
+  marks: [Map<number, TagMark>, Map<number, TagMark>] = [new Map(), new Map()];
+  objectiveFound: [boolean, boolean] = [false, false];
   private obsCache: { rev: number; tick: number; list: ObstacleRef[] } | null = null;
 
   constructor(cfg: RoundConfig) {
     this.cfg = cfg;
-    this.map = buildSpinCycle();
+    this.map = buildMap(cfg.mapId ?? 'spin_cycle');
     this.rng = new Rng(cfg.seed);
     this.attackTeam = cfg.attackTeam;
     this.phaseEndTick = secs(cfg.prepSeconds ?? RULES.prep_seconds);
@@ -120,18 +129,13 @@ export class World implements GeoState {
     this.knownSoft = [this.soft.map(() => 'intact'), this.soft.map(() => 'intact')];
     this.knownBarricade = [this.barricades.map(() => false), this.barricades.map(() => false)];
     this.spawnActors();
-    // one shared scouting puck for the attacking side during prep (docs/02 Preparation)
-    const entry = this.map.entries.find((e) => e.id === cfg.attackEntry) ?? this.map.entries[0];
-    this.entities.push({
-      kind: 'puck',
-      id: this.newEntityId(),
-      team: cfg.attackTeam,
-      ownerId: -1,
-      pos: { x: entry.spots[0][0] + 0.6, y: entry.spots[0][1] - 0.6 },
-      hp: 20,
-      driverId: -1,
-      stepAccum: 0,
-    });
+    // Siege-style recon: every attacker starts prep driving their first drone
+    if (this.phaseEndTick > 0 && this.cfg.mode !== 'range') for (const a of this.actors) if (a.side === 'attack') deployDrone(this, a);
+    if (this.phaseEndTick <= 0) {
+      this.phase = 'action';
+      this.prepConfine = null;
+      this.phaseEndTick = secs(cfg.actionSeconds ?? RULES.action_seconds);
+    }
     updatePerception(this);
   }
 
@@ -191,6 +195,13 @@ export class World implements GeoState {
           lastDamagedTick: -1000,
           lastDamagedBy: -1,
           kills: 0,
+          deaths: 0,
+          assists: 0,
+          damageDealt: 0,
+          drones: side === 'attack' ? 2 : 0,
+          tagReadyTick: 0,
+          ads: false,
+          damagedBy: [],
           vaulting: null,
         };
         a.prevPos = { ...a.pos };
@@ -277,7 +288,7 @@ export class World implements GeoState {
     stepGadgetCommands(this, get);
     // 2. movement + active gadget motion
     stepMovement(this, get);
-    stepPuck(this, get);
+    stepDrones(this, get);
     stepEntities(this);
     // 3. geometry revisions are applied atomically inside the gadget/wall handlers
     // 4. perception from the updated geometry
@@ -290,17 +301,25 @@ export class World implements GeoState {
     this.resolveDeaths();
     // 7. surviving interaction completions
     completeInteractions(this);
-    // 8. round rules
-    stepRules(this);
+    // 8. round rules (the shooting range never ends; it resets targets instead)
+    if (this.cfg.mode === 'range') stepRange(this);
+    else stepRules(this);
+    for (const team of [0, 1] as TeamId[]) for (const [id, m] of this.marks[team]) if (this.tick > m.untilTick) this.marks[team].delete(id);
     for (const a of this.actors) a.interactHeldLastTick = a.alive && get(a).interact;
   }
 
   damageActor(target: Actor, amount: number, sourceId: number) {
     if (!target.alive || amount <= 0) return;
     if (this.phase === 'prep') return;
+    const dealt = Math.min(target.hp, amount);
     target.hp = Math.max(0, target.hp - amount);
     target.lastDamagedTick = this.tick;
     target.lastDamagedBy = sourceId;
+    const src = this.actor(sourceId);
+    if (src && src.team !== target.team) {
+      src.damageDealt += dealt;
+      if (!target.damagedBy.includes(src.id)) target.damagedBy.push(src.id);
+    }
     target.flinchUntil = this.tick + secs(0.12);
     this.damagedThisTick.add(target.id);
     this.emit({ type: 'damage', actorId: target.id, amount, sourceId, hpAfter: target.hp });
@@ -316,8 +335,11 @@ export class World implements GeoState {
           a.interaction = null;
         }
         a.vaulting = null;
+        a.deaths++;
         const killer = this.actor(a.lastDamagedBy);
         if (killer && killer.team !== a.team) killer.kills++;
+        for (const id of a.damagedBy) if (id !== a.lastDamagedBy) this.actor(id)!.assists++;
+        a.damagedBy = [];
         this.emit({ type: 'death', actorId: a.id, killerId: a.lastDamagedBy });
       }
     }

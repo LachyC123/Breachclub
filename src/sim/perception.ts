@@ -7,7 +7,7 @@ import type { HeardSound, SoundEvent, TeamId, Vec } from './types';
 import type { World } from './world';
 
 const VISION = RULES.vision_tiles;
-export const PUCK_VISION = 6;
+export const DRONE_VISION = 8;
 const HEARD_KEEP_TICKS = 60 * 6;
 
 export function canSee(w: World, from: Vec, to: Vec): boolean {
@@ -19,10 +19,9 @@ export function updatePerception(w: World) {
   const obs = w.obstacles();
   for (const team of [0, 1] as TeamId[]) {
     const eyes = w.actors.filter((a) => a.team === team && a.alive);
-    const puck = w.entities.find((e) => e.kind === 'puck' && e.team === team);
-    // the puck is a low camera: shorter view, still hard-occluded by walls
+    // recon drones are low cameras: hard-occluded by walls like everyone else
     const viewers: Array<{ id: number; pos: Vec; range: number }> = eyes.map((a) => ({ id: a.id, pos: a.pos, range: VISION }));
-    if (puck && puck.kind === 'puck') viewers.push({ id: -puck.id, pos: puck.pos, range: PUCK_VISION });
+    for (const d of w.entities) if (d.kind === 'drone' && d.team === team) viewers.push({ id: -d.id, pos: d.pos, range: DRONE_VISION });
     const vis = new Set<number>();
     const spot = new Map<number, number>();
     for (const e of w.actors) {
@@ -54,7 +53,7 @@ export function updatePerception(w: World) {
         continue;
       }
       const c = ent.kind === 'cover' ? { x: ent.obb.cx, y: ent.obb.cy } : ent.kind === 'hinge' ? ent.center : ent.pos;
-      // the puck reveals gadgets too
+      // drones reveal gadgets too
       const extraEyes = viewers.filter((v) => v.id < 0).map((v) => ({ pos: v.pos }));
       const probes: Vec[] = [c];
       if (ent.kind === 'hinge') {
@@ -80,6 +79,13 @@ export function updatePerception(w: World) {
       if (seen) ents.add(ent.id);
     }
     w.visibleEntities[team] = ents;
+    if (!w.objectiveFound[team] && team === w.attackTeam) {
+      const c = w.map.console.center;
+      if (viewers.some((v) => dist(v.pos, c) <= v.range && !raycast(w, v.pos, c, 'sight', { obs, ignoreCell: w.map.console.cells[0] }))) {
+        w.objectiveFound[team] = true;
+        w.emit({ type: 'objectiveFound', team });
+      }
+    }
 
     // soft panel / barricade knowledge: updated only when the surface is observed
     if (w.tick % 6 === 0 || w.tick < 2) {

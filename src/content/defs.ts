@@ -84,6 +84,8 @@ export const SQUADMATES: SquadmateDef[] = [
   { id: 'recruit_tess', name: 'TESS', side: 'attack', weapon: 'scattergun', look: 'tess' },
   { id: 'recruit_dex', name: 'DEX', side: 'defence', weapon: 'smg', look: 'dex' },
   { id: 'recruit_june', name: 'JUNE', side: 'defence', weapon: 'scattergun', look: 'june' },
+  // shooting-range target dummy (never fires)
+  { id: 'dummy', name: 'TARGET', side: 'defence', weapon: 'smg', look: 'dummy' },
 ];
 
 export function weaponForOperator(opId: string): WeaponDef['id'] {

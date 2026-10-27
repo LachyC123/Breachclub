@@ -187,8 +187,8 @@ export function obstacles(g: GeoState): ObstacleRef[] {
       out.push({ obb: e.obb, entityId: e.id, kind: e.kind, blocksSight: true, blocksBullet: true, blocksMove: true });
     else if (e.kind === 'sled')
       out.push({ obb: sledObb(e), entityId: e.id, kind: e.kind, blocksSight: false, blocksBullet: true, blocksMove: true });
-    else if (e.kind === 'puck')
-      out.push({ obb: { cx: e.pos.x, cy: e.pos.y, hx: 0.22, hy: 0.22, angle: 0 }, entityId: e.id, kind: e.kind, blocksSight: false, blocksBullet: true, blocksMove: false });
+    else if (e.kind === 'drone')
+      out.push({ obb: { cx: e.pos.x, cy: e.pos.y, hx: 0.24, hy: 0.24, angle: 0 }, entityId: e.id, kind: e.kind, blocksSight: false, blocksBullet: true, blocksMove: false });
   }
   return out;
 }

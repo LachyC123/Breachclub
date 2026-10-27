@@ -16,9 +16,8 @@ export function stepRules(w: World) {
     if (w.tick >= w.phaseEndTick) {
       w.phase = 'action';
       w.prepConfine = null;
-      // the puck expires so it is not a second permanent surveillance system
-      for (const e of w.entities) if (e.kind === 'puck') w.emit({ type: 'puckExpired', puckId: e.id });
-      w.entities = w.entities.filter((e) => e.kind !== 'puck');
+      // recon drones are prep-only: they power down when the action phase starts
+      w.entities = w.entities.filter((e) => e.kind !== 'drone');
       w.bumpGeometry();
       // prep shooting (at the puck) never costs action ammo
       for (const a of w.actors) {

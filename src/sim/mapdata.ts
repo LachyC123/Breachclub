@@ -1,14 +1,26 @@
 // Static map model built from an authored ASCII tilemap. Per-round mutable state
 // (soft panel HP, barricades, gadgets) lives in World, never here.
-import {
-  SPIN_CYCLE_ROWS,
-  SPIN_CYCLE_ROOMS,
-  SPIN_CYCLE_ENTRIES,
-  SPIN_CYCLE_DEFENDER_SPAWNS,
-  SPIN_CYCLE_META,
-  type RoomDef,
-  type EntryPoint,
-} from '../content/spinCycle';
+import { SPIN_CYCLE } from '../content/spinCycle';
+import { RANGE_MAP } from '../content/rangeMap';
+import type { MapDef, RoomDef, EntryPoint } from '../content/mapdef';
+
+export type MapId = 'spin_cycle' | 'range';
+const DEFS: Record<MapId, MapDef> = { spin_cycle: SPIN_CYCLE, range: RANGE_MAP };
+const built = new Map<MapId, MapData>();
+
+/** Static map data is immutable, so it is built once per map and shared. */
+export function buildMap(id: MapId): MapData {
+  let m = built.get(id);
+  if (!m) {
+    m = buildFromDef(DEFS[id]);
+    built.set(id, m);
+  }
+  return m;
+}
+
+export function buildSpinCycle(): MapData {
+  return buildMap('spin_cycle');
+}
 import type { Vec } from './types';
 
 export enum CellKind {
@@ -72,8 +84,8 @@ export interface MapData {
 
 export const idx = (m: { w: number }, x: number, y: number) => y * m.w + x;
 
-export function buildSpinCycle(): MapData {
-  const rows = SPIN_CYCLE_ROWS;
+function buildFromDef(def: MapDef): MapData {
+  const rows = def.rows;
   const h = rows.length;
   const w = rows[0].length;
   const n = w * h;
@@ -120,6 +132,7 @@ export function buildSpinCycle(): MapData {
           break;
         case '1':
         case '2':
+        case '3':
         case '4':
         case 'P':
         case 'Q':
@@ -172,7 +185,7 @@ export function buildSpinCycle(): MapData {
     }
   }
 
-  const rooms = SPIN_CYCLE_ROOMS;
+  const rooms = def.rooms;
   rooms.forEach((r, ri) => {
     for (const [x0, y0, x1, y1] of r.rects)
       for (let y = y0; y <= y1; y++)
@@ -183,7 +196,10 @@ export function buildSpinCycle(): MapData {
         }
   });
   // Building shell (walls, panels, doors, windows) counts as interior for prep confinement.
-  for (let y = 2; y <= 22; y++) for (let x = 2; x <= 31; x++) interior[y * w + x] = 1;
+  if (def.shell) {
+    const [sx0, sy0, sx1, sy1] = def.shell;
+    for (let y = sy0; y <= sy1; y++) for (let x = sx0; x <= sx1; x++) interior[y * w + x] = 1;
+  }
 
   const centerOf = (cells: number[]): Vec => {
     let sx = 0;
@@ -206,7 +222,7 @@ export function buildSpinCycle(): MapData {
       index,
       id,
       cells,
-      rooms: SPIN_CYCLE_META.softGroupRooms[id],
+      rooms: def.softGroupRooms[id],
       center: centerOf(cells),
       horizontal: isHorizontal(cells),
     };
@@ -219,27 +235,23 @@ export function buildSpinCycle(): MapData {
       index,
       id,
       cells,
-      rooms: SPIN_CYCLE_META.doorRooms[id],
+      rooms: def.doorRooms[id],
       center: centerOf(cells),
       horizontal: isHorizontal(cells),
-      protected: id === 'P' || id === 'Q' || id === 'R',
+      protected: def.protectedDoors.includes(id),
     };
   });
 
   // The single authored vault link: alley (west) <-> service through the window.
-  const wc = centerOf(windowCells);
-  const vaults: VaultLink[] = [
-    {
-      windowCells,
-      a: { x: wc.x - 1.1, y: wc.y },
-      b: { x: wc.x + 1.1, y: wc.y },
-      center: wc,
-    },
-  ];
+  const vaults: VaultLink[] = [];
+  if (windowCells.length) {
+    const wc = centerOf(windowCells);
+    vaults.push({ windowCells, a: { x: wc.x - 1.1, y: wc.y }, b: { x: wc.x + 1.1, y: wc.y }, center: wc });
+  }
 
   return {
-    id: SPIN_CYCLE_META.id,
-    name: SPIN_CYCLE_META.name,
+    id: def.id,
+    name: def.name,
     w,
     h,
     kind,
@@ -252,12 +264,14 @@ export function buildSpinCycle(): MapData {
     doors,
     vaults,
     console: { cells: consoleCells, center: centerOf(consoleCells) },
-    entries: SPIN_CYCLE_ENTRIES,
-    defenderSpawns: SPIN_CYCLE_DEFENDER_SPAWNS.map(([x, y]) => ({ x, y })),
-    objectiveRoom: SPIN_CYCLE_META.objectiveRoom,
+    entries: def.entries,
+    defenderSpawns: def.defenderSpawns.map(([x, y]) => ({ x, y })),
+    objectiveRoom: def.objectiveRoom,
     interior,
   };
 }
+
+export type { RoomDef, EntryPoint };
 
 export function roomAt(m: MapData, p: Vec): RoomDef | undefined {
   const x = Math.floor(p.x);
