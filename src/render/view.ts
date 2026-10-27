@@ -184,6 +184,9 @@ export class WorldView {
   private juice: Fx;
   private kick = { x: 0, y: 0 };
   private shotThisTick = new Set<number>();
+  private dmgThisTick = new Map<number, { amt: number; kill: boolean; pos: Vec }>();
+  /** slow-motion close-up on the round's final kill */
+  private killcam: { pos: Vec; t: number } | null = null;
   /** wider view while aiming down sights */
   private adsZoom = 2;
   private curZoom = 3;
@@ -276,6 +279,7 @@ export class WorldView {
   onEvents(events: SimEvent[]) {
     const w = this.world;
     this.shotThisTick.clear();
+    this.dmgThisTick.clear();
     const vis = (id: number) => {
       const a = w.actor(id);
       return !!a && (a.team === 0 || w.visible[0].has(id));
@@ -325,7 +329,15 @@ export class WorldView {
             const t = w.actor(e.actorId);
             if (t) this.hits.push({ pos: { ...t.pos }, t: e.hpAfter <= 0 ? 0.45 : 0.22, kill: e.hpAfter <= 0 });
             if (this.hits.length > 8) this.hits.shift();
+            // one number per target per tick (a scattergun blast is five pellets)
+            if (t) {
+              const d = this.dmgThisTick.get(t.id) ?? { amt: 0, kill: false, pos: { ...t.pos } };
+              d.amt += e.amount;
+              d.kill = d.kill || e.hpAfter <= 0;
+              this.dmgThisTick.set(t.id, d);
+            }
           }
+          if (e.actorId === this.humanId) this.addShake(1.2, 0.1);
           const v = this.actors.get(e.actorId);
           if (v && vis(e.actorId)) {
             v.flashUntil = this.time + 0.08;
@@ -394,6 +406,11 @@ export class WorldView {
           this.addShake(1, 0.12);
           break;
         }
+        case 'slide': {
+          const a = w.actor(e.actorId);
+          if (a && vis(a.id)) this.juice.smoke(a.pos, 3, 0.8, Math.atan2(-a.vel.y, -a.vel.x), P.cream);
+          break;
+        }
         case 'hingeBlocked': {
           const h = w.entities.find((x) => x.id === e.hingeId);
           if (h && h.team === 0) this.blockedCells = { cells: e.cells, t: 1.2 };
@@ -412,6 +429,12 @@ export class WorldView {
             if (v) v.fall = { x: Math.cos(dir) * shove, y: Math.sin(dir) * shove * 0.7, t: 0 };
           }
           if (a && a.team === 0) this.addShake(1.5, 0.2);
+          if (a && k && k.id === this.humanId && a.team !== 0) {
+            // your kill: a burst you feel
+            this.juice.shockwave(a.pos, 1.6, P.coral);
+            this.juice.sparks(a.pos, 12, P.coralLight, 130);
+            this.addShake(2.2, 0.14);
+          }
           break;
         }
         case 'sound': {
@@ -426,6 +449,11 @@ export class WorldView {
   pushSoundArc(ang: number, spread: number, kind: string) {
     this.arcs.push({ ang, spread, kind, t: 1.4 });
     if (this.arcs.length > 8) this.arcs.shift();
+  }
+
+  /** Slow-motion punch-in on the round's last kill. */
+  finalKill(pos: Vec) {
+    this.killcam = { pos: { ...pos }, t: 1.6 };
   }
 
   /** pump action: the spent shell flies out a beat after the blast */
@@ -582,9 +610,16 @@ export class WorldView {
         this.ents.delete(id);
       }
 
-    this.updateFx(dt);
+    this.updateFx(this.killcam ? dt * 0.3 : dt);
     this.ejectShells();
-    this.juice.update(dt);
+    for (const [, d] of this.dmgThisTick) this.juice.number(d.pos, d.amt, d.kill);
+    this.dmgThisTick.clear();
+    if (this.killcam) {
+      this.killcam.t -= dt;
+      if (this.killcam.t <= 0) this.killcam = null;
+    }
+    // the kill cam runs effects in slow motion
+    this.juice.update(this.killcam ? dt * 0.3 : dt);
     if (this.frame % 2 === 0 || this.polyCache.length === 0) this.drawFog(o.droneId);
     this.drawOverlay(humanId, o.preview, o.laser, o.ads);
     this.drawRain(dt);
@@ -967,7 +1002,8 @@ export class WorldView {
     const cam = this.scene.cameras.main;
     const h = w.actor(humanId);
     // ease between the hip and ADS zoom (~0.2 s), then settle exactly on the step for crisp pixels
-    const want = ads && !focus && h?.alive ? this.adsZoom : this.zoom;
+    const want = this.killcam ? this.zoom + 1 : ads && !focus && h?.alive ? this.adsZoom : this.zoom;
+    if (this.killcam) focus = this.killcam.pos;
     this.curZoom += (want - this.curZoom) * (1 - Math.pow(0.0001, dt));
     if (Math.abs(want - this.curZoom) < 0.02) this.curZoom = want;
     if (cam.zoom !== this.curZoom) cam.setZoom(this.curZoom);

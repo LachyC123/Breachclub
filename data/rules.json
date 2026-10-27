@@ -8,7 +8,7 @@
   "arm_seconds": 3,
   "shutdown_seconds": 3,
   "base_health": 100,
-  "walk_tiles_per_second": 3,
+  "walk_tiles_per_second": 3.8,
   "vision_tiles": 9,
   "reinforcements_per_team": 2,
   "barricades_per_team": 3,

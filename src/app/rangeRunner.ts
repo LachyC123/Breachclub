@@ -31,12 +31,14 @@ export class RangeRunner implements Runner {
   private hits = 0;
   private elims = 0;
   private lastCount = '';
+  private hitstop = 0;
 
   constructor(private ctx: AppCtx) {
     this.hud = new Hud(ctx.ui);
     this.hud.root.style.display = 'none';
     this.input = new PlayInput(this.hud, ctx.sfx, () => ctx.settings, () => this.world ?? null);
     this.fb = new Feedback(ctx.sfx, this.hud, ctx.view, () => ctx.scene.cameras.main.zoom);
+    this.fb.onHumanKill = () => (this.hitstop = 0.07);
     this.statsEl = h('div', { class: 'range-stats' });
     this.loadoutBtn = h('button', { class: 'chip-btn loadout' }, 'CHANGE OPERATOR');
     this.loadoutBtn.addEventListener('pointerdown', (e) => {
@@ -162,7 +164,10 @@ export class RangeRunner implements Runner {
     this.input.tick(dt);
     const w = this.world;
     const view = this.ctx.view;
-    if (this.state === 'playing') this.stepper.advance(dt, () => this.tick());
+    if (this.state === 'playing') {
+      if (this.hitstop > 0) this.hitstop -= dt;
+      else this.stepper.advance(dt, () => this.tick());
+    }
     const human = w.human();
     if (human) {
       const scr = view.worldToScreen(human.pos);

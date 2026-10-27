@@ -2,7 +2,7 @@
   {
     "id": "smg",
     "name": "Pocket SMG",
-    "damage": 18,
+    "damage": 22,
     "pellets": 1,
     "interval_seconds": 0.11,
     "magazine": 24,
@@ -18,7 +18,7 @@
   {
     "id": "carbine",
     "name": "Carbine",
-    "damage": 25,
+    "damage": 30,
     "pellets": 1,
     "interval_seconds": 0.18,
     "magazine": 18,
@@ -34,7 +34,7 @@
   {
     "id": "scattergun",
     "name": "Scattergun",
-    "damage": 12,
+    "damage": 14,
     "pellets": 5,
     "interval_seconds": 0.65,
     "magazine": 6,

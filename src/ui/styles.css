@@ -2280,3 +2280,13 @@ button {
     opacity: 0;
   }
 }
+
+.act.slide {
+  width: 52px;
+  height: 52px;
+  right: 206px;
+  bottom: 14px;
+}
+.hud[data-mode='drone'] .act.slide {
+  display: none;
+}

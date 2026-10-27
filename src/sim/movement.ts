@@ -124,6 +124,10 @@ export function circleFree(g: GeoState, p: Vec, r: number): boolean {
   return true;
 }
 
+export const SLIDE_SECONDS = 0.32;
+export const SLIDE_COOLDOWN = 2.2;
+const SLIDE_MULT = 2.3;
+
 export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
   const speedBase = RULES.walk_tiles_per_second;
   for (const a of w.actors) {
@@ -158,6 +162,20 @@ export function stepMovement(w: World, get: (a: Actor) => ActorIntent) {
       my = 0;
     }
     const hd = WEAPON_HANDLING[a.weapon.id];
+    // slide: a short committed burst in the stick direction, then a cooldown
+    if (it.slide && !a.slide && w.tick >= a.slideReadyTick && Math.hypot(mx, my) > 0.3 && !a.interaction && !droning && a.gadgetWindupUntil < w.tick) {
+      const l = Math.hypot(mx, my);
+      a.slide = { dir: { x: mx / l, y: my / l }, until: w.tick + secs(SLIDE_SECONDS) };
+      a.slideReadyTick = w.tick + secs(SLIDE_COOLDOWN);
+      w.emit({ type: 'slide', actorId: a.id });
+      w.emitSound(a.pos, 'step', 6, a.team, a.id);
+    }
+    if (a.slide && w.tick >= a.slide.until) a.slide = null;
+    if (a.slide) {
+      mx = a.slide.dir.x * SLIDE_MULT;
+      my = a.slide.dir.y * SLIDE_MULT;
+      a.ads = false;
+    }
     // operator speed rating, slower while aiming, and a brief stagger after each shot
     let speed = speedBase * SPEED_MULT[statsOf(a.operatorId).speed] * (a.ads ? hd.adsMove : 1);
     if (w.tick < a.nextShotTick && a.mag < a.weapon.magazine) speed *= hd.fireMove;

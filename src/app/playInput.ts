@@ -31,6 +31,7 @@ export class PlayInput {
     c.bindGadgetButton(hud.gadgetBtn);
     c.bindHoldButton(hud.interactBtn, (held) => c.setInteract(held));
     c.bindTap(hud.tagBtn, () => c.requestTag());
+    c.bindTap(hud.slideBtn, () => c.requestSlide());
     c.gadgetPreviewAllowed = () => this.previewAllowed();
     c.gadgetTapAction = () => this.tap();
     c.gadgetCommitAction = (p) => this.commit(p);

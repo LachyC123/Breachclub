@@ -96,7 +96,7 @@ function fire(w: World, a: Actor) {
   }
   a.mag--;
   a.nextShotTick = w.tick + Math.max(1, secs(wpn.interval_seconds));
-  const moving = Math.hypot(a.vel.x, a.vel.y) > 0.5 ? hd.movingSpread : 0;
+  const moving = (Math.hypot(a.vel.x, a.vel.y) > 0.5 ? hd.movingSpread : 0) + (a.slide ? 0.05 : 0);
   const adsK = a.ads ? 0.4 : 1;
   const spread = (hd.baseSpread + a.bloom + moving) * adsK;
   a.bloom = Math.min(0.12, a.bloom + hd.bloomPerShot * (a.ads ? 0.6 : 1));

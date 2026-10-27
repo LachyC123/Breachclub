@@ -61,6 +61,11 @@ export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff: Di
     b.acquiredTick = w.tick;
     b.reactionTicks = secs(w.rng.range(diff.reaction[0], diff.reaction[1]));
     b.aimOffset = (w.rng.next() < 0.5 ? -1 : 1) * diff.aimStart * w.rng.range(0.6, 1.0);
+    // holding an angle pays off: a target that walks into where you're already aiming is quicker to hit
+    if (b.status === 'Holding' && Math.abs(normAngle(a.facing - angleTo(a.pos, target.pos))) < 0.45) {
+      b.reactionTicks = Math.round(b.reactionTicks * 0.6);
+      b.aimOffset *= 0.4;
+    }
     b.burstEnd = 0;
     b.burstPauseEnd = 0;
   }
@@ -99,7 +104,11 @@ export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff: Di
   if ((losing || outnumbered || (a.mag === 0 && a.reserve > 0)) && !b.fallback && !a.interaction && b.fallbackCount < 2 && w.secondsLeft() > 15) {
     b.fallbackCount++;
     const cover = coverFrom(w, a, a.pos, target.pos);
-    if (cover) b.fallback = { pos: cover, until: w.tick + secs(2.2), threat: { ...target.pos } };
+    if (cover) {
+      b.fallback = { pos: cover, until: w.tick + secs(2.2), threat: { ...target.pos } };
+      // burst into cover
+      intent.slide = true;
+    }
   }
   if (b.fallback && w.tick < b.fallback.until) {
     followPath(w, a, b, b.fallback.pos, intent, { arrive: 0.3 });
@@ -132,6 +141,8 @@ export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff: Di
   if (diff.strafe && w.tick >= b.strafeUntil) {
     b.strafeDir = w.rng.next() < 0.5 ? -1 : 1;
     b.strafeUntil = w.tick + secs(w.rng.range(0.4, 0.9));
+    // the odd slide-strafe makes skilled bots harder to track
+    if (!opts.hold && w.rng.next() < 0.18) intent.slide = true;
   }
   let mx = 0;
   let my = 0;

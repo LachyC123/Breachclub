@@ -208,6 +208,8 @@ export class World implements GeoState {
           ads: false,
           damagedBy: [],
           vaulting: null,
+          slide: null,
+          slideReadyTick: 0,
         };
         a.prevPos = { ...a.pos };
         this.actors.push(a);

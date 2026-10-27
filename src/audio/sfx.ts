@@ -23,7 +23,7 @@ export type SfxName =
   | 'invalid' | 'death' | 'vault'
   | 'console_tick' | 'armed_alarm' | 'shutoff' | 'round_win' | 'round_lose'
   | 'ui_tap' | 'ui_confirm' | 'ui_back' | 'takeover' | 'prep_start' | 'action_start' | 'low_time'
-  | 'hitmarker' | 'kill_confirm' | 'drone_tag' | 'drone_move';
+  | 'hitmarker' | 'kill_confirm' | 'drone_tag' | 'drone_move' | 'slide';
 
 export type SfxCategory = 'weapons' | 'world' | 'ui' | 'ambience' | 'music';
 
@@ -53,7 +53,7 @@ const CATEGORY: Record<SfxName, SfxCategory> = {
   invalid: 'ui', death: 'world', vault: 'world',
   console_tick: 'world', armed_alarm: 'world', shutoff: 'world', round_win: 'ui', round_lose: 'ui',
   ui_tap: 'ui', ui_confirm: 'ui', ui_back: 'ui', takeover: 'ui', prep_start: 'ui', action_start: 'ui', low_time: 'ui',
-  hitmarker: 'weapons', kill_confirm: 'weapons', drone_tag: 'ui', drone_move: 'world',
+  hitmarker: 'weapons', kill_confirm: 'weapons', drone_tag: 'ui', drone_move: 'world', slide: 'world',
 };
 
 /** Internal mix trims per category (multiplied with the user's slider). */
@@ -706,6 +706,11 @@ const SYN: Record<SfxName, (s: Syn) => void> = {
       s.tone({ type: 'sawtooth', f, a: 0.005, hold: 0.08, d: 0.2, peak: 0.06, filt: 'lowpass', ff: 700, ff1: 4000, fglide: 0.1 });
     }
     s.tone({ type: 'square', f: 587.33, at: 0.12, hold: 0.05, d: 0.18, peak: 0.055, filt: 'lowpass', ff: 3000 });
+  },
+  slide: (s) => {
+    // fabric-on-floor whoosh with a scuff
+    s.noise({ kind: 'pink', filt: 'bandpass', ff: 900, ff1: 2600, q: 0.8, a: 0.02, d: 0.28, peak: 0.45 });
+    s.noise({ filt: 'highpass', ff: 3000, at: 0.02, d: 0.12, peak: 0.12 });
   },
   hitmarker: (s) => {
     // short dry tick: confirms a hit without masking the gunfire

@@ -52,6 +52,28 @@ interface Ring {
   col: number;
 }
 
+// 3x5 pixel digits for floating damage numbers (rows top to bottom, 3 bits each)
+const DIGITS: Record<string, number[]> = {
+  '0': [7, 5, 5, 5, 7],
+  '1': [2, 6, 2, 2, 7],
+  '2': [7, 1, 7, 4, 7],
+  '3': [7, 1, 7, 1, 7],
+  '4': [5, 5, 7, 1, 1],
+  '5': [7, 4, 7, 1, 7],
+  '6': [7, 4, 7, 5, 7],
+  '7': [7, 1, 2, 2, 2],
+  '8': [7, 5, 7, 5, 7],
+  '9': [7, 5, 7, 1, 7],
+};
+
+interface FloatNum {
+  x: number;
+  y: number;
+  text: string;
+  t: number;
+  big: boolean;
+}
+
 const DEPTH_DECAL = 2;
 const DEPTH_JUICE = 9001;
 const DEPTH_LIGHT = 9003;
@@ -84,6 +106,7 @@ export class Fx {
   private puffs: Puff[] = [];
   private sparkList: Spark[] = [];
   private rings: Ring[] = [];
+  private nums: FloatNum[] = [];
   private lights: Array<{ img: Phaser.GameObjects.Image; t: number; dur: number; s: number }> = [];
 
   constructor(private scene: Phaser.Scene) {}
@@ -112,6 +135,7 @@ export class Fx {
     this.puffs = [];
     this.sparkList = [];
     this.rings = [];
+    this.nums = [];
   }
 
   // ---------- emitters (positions in tiles) ----------
@@ -152,6 +176,37 @@ export class Fx {
 
   shockwave(p: Vec, radiusTiles: number, col: string = P.cream2) {
     this.rings.push({ x: p.x * T, y: p.y * T - 4, r: 2, max: radiusTiles * T, t: 0, dur: 0.35, col: hex(col) });
+  }
+
+  /** Floating damage number above a target (big and red on a kill). */
+  number(p: Vec, n: number, big: boolean) {
+    if (this.nums.length > 16) this.nums.shift();
+    this.nums.push({ x: p.x * T + (Math.random() - 0.5) * 6, y: p.y * T - 22, text: String(Math.max(1, Math.round(n))), t: 0, big });
+  }
+
+  private drawNumber(n: FloatNum) {
+    const g = this.g;
+    const s = n.big ? 2 : 1;
+    const k = n.t / (n.big ? 0.9 : 0.6);
+    const alpha = k < 0.7 ? 1 : Math.max(0, 1 - (k - 0.7) / 0.3);
+    // pop: overshoot then settle, rising as it fades
+    const pop = n.t < 0.08 ? 1 + (0.08 - n.t) * 6 : 1;
+    const sc = Math.max(1, Math.round(s * pop));
+    const w = n.text.length * 4 * sc - sc;
+    let x = Math.round(n.x - w / 2);
+    const y = Math.round(n.y - n.t * 22);
+    for (const ch of n.text) {
+      const rows = DIGITS[ch];
+      if (!rows) continue;
+      for (let r = 0; r < 5; r++)
+        for (let c = 0; c < 3; c++) {
+          if (!(rows[r] & (4 >> c))) continue;
+          // dark outline under each lit pixel keeps it readable on any floor
+          g.fillStyle(hex(P.ink), alpha).fillRect(x + c * sc + 1, y + r * sc + 1, sc, sc);
+          g.fillStyle(n.big ? hex(P.coral) : hex(P.white), alpha).fillRect(x + c * sc, y + r * sc, sc, sc);
+        }
+      x += 4 * sc;
+    }
   }
 
   // ---------- decals ----------
@@ -291,5 +346,10 @@ export class Fx {
       if (k >= 1) l.img.destroy();
     }
     this.lights = this.lights.filter((l) => l.t < l.dur);
+    for (const n of this.nums) {
+      n.t += dt;
+      this.drawNumber(n);
+    }
+    this.nums = this.nums.filter((n) => n.t < (n.big ? 0.9 : 0.6));
   }
 }

@@ -79,6 +79,7 @@ export class Hud {
   gadgetBtn: HTMLElement;
   interactBtn: HTMLElement;
   tagBtn: HTMLElement;
+  slideBtn: HTMLElement;
   nextBtn: HTMLElement;
   pauseBtn: HTMLElement;
   boardBtn: HTMLElement;
@@ -166,9 +167,10 @@ export class Hud {
     this.gadgetBtn = act('gadget', 'sled', 'GADGET', [h('div', { class: 'pips' }), this.gadgetRing.svg]);
     this.interactBtn = act('interact', 'arm', 'INTERACT', [this.interactRing.svg]);
     this.tagBtn = act('tag', 'tag', 'TAG', [this.tagRing.svg]);
+    this.slideBtn = act('slide', 'slide', 'SLIDE');
     this.nextBtn = act('next', 'next', 'NEXT CAM');
     this.ammo = h('div', { class: 'ammo' });
-    this.cluster = h('div', { class: 'cluster' }, this.interactBtn, this.gadgetBtn, this.reloadBtn, this.adsBtn, this.fireBtn, this.tagBtn, this.nextBtn, this.ammo);
+    this.cluster = h('div', { class: 'cluster' }, this.slideBtn, this.interactBtn, this.gadgetBtn, this.reloadBtn, this.adsBtn, this.fireBtn, this.tagBtn, this.nextBtn, this.ammo);
 
     // ---- overlays ----
     this.vignette = h('div', { class: 'lowhp-vignette' });
@@ -366,6 +368,8 @@ export class Hud {
       });
     }
     this.set('ads', String(s.ads), () => this.adsBtn.classList.toggle('on', s.ads));
+    const slideReady = !!human && w.tick >= human.slideReadyTick;
+    this.set('slide', String(slideReady), () => this.slideBtn.classList.toggle('disabled', !slideReady));
 
     // ---- contextual interact ----
     const ik = s.interact ? `${s.interact.kind}|${s.interact.enabled}|${s.interact.label}` : 'none';

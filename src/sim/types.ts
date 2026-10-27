@@ -59,6 +59,8 @@ export interface ActorIntent {
   ads: boolean;
   /** prep only (attackers): drive your active drone and tag what it sees */
   drone: { move: Vec; tag: boolean } | null;
+  /** burst slide in the move direction (cooldown) */
+  slide: boolean;
 }
 
 export const emptyIntent = (): ActorIntent => ({
@@ -70,6 +72,7 @@ export const emptyIntent = (): ActorIntent => ({
   gadget: null,
   ads: false,
   drone: null,
+  slide: false,
 });
 
 export interface Actor {
@@ -119,6 +122,9 @@ export interface Actor {
   /** who damaged this actor this round (for assists) */
   damagedBy: number[];
   vaulting: { from: Vec; to: Vec; startTick: number; endTick: number } | null;
+  /** active slide: locked direction until this tick */
+  slide: { dir: Vec; until: number } | null;
+  slideReadyTick: number;
 }
 
 export type SoftState = 'intact' | 'reinforced' | 'breached';
@@ -286,6 +292,7 @@ export type SimEvent =
   | { type: 'tagged'; id: number; team: TeamId; actorId: number; byId: number }
   | { type: 'objectiveFound'; id: number; team: TeamId }
   | { type: 'vault'; id: number; actorId: number }
+  | { type: 'slide'; id: number; actorId: number }
   | { type: 'phase'; id: number; phase: Phase }
   | { type: 'roundEnded'; id: number; winner: TeamId; reason: RoundReason }
   | { type: 'sound'; id: number; sound: SoundEvent }

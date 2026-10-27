@@ -204,7 +204,8 @@ export type IconName =
   | 'fire'
   | 'next'
   | 'push'
-  | 'scoreboard';
+  | 'scoreboard'
+  | 'slide';
 
 export function buildIcon(name: IconName): HTMLCanvasElement {
   const p = new Pix(16, 16);
@@ -345,6 +346,12 @@ export function buildIcon(name: IconName): HTMLCanvasElement {
     case 'push': {
       p.line(3, 12, 8, 3, C).line(8, 3, 13, 12, C).line(4, 12, 8, 4, C).line(8, 4, 12, 12, C);
       p.hl(5, 11, 13, A);
+      break;
+    }
+    case 'slide': {
+      // figure low and fast with speed lines
+      p.rect(8, 6, 3, 3, C).rect(6, 9, 6, 2, C).line(5, 11, 3, 13, C).line(11, 11, 13, 13, C);
+      p.hl(1, 5, 6, A).hl(2, 6, 8, A).hl(1, 4, 10, A);
       break;
     }
     case 'scoreboard': {

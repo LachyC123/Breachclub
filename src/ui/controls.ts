@@ -220,6 +220,12 @@ export class Controls {
     this.reloadTap = true;
   }
 
+  private slideTap = false;
+
+  requestSlide() {
+    this.slideTap = true;
+  }
+
   requestTag() {
     this.tagTap = true;
   }
@@ -340,6 +346,7 @@ export class Controls {
     if (k === 'r') this.reloadTap = true;
     if (k === 'e') this.interactHeld = true;
     if (k === 'f') this.tagTap = true;
+    if (k === ' ') this.slideTap = true;
     if (k === 'q') {
       this.qHeld = true;
       this.gadgetDownAt = performance.now();
@@ -418,6 +425,8 @@ export class Controls {
     it.fire = fire && !this.gadget.active;
     it.ads = ads;
     it.interact = this.interactHeld;
+    it.slide = this.slideTap;
+    this.slideTap = false;
     it.reload = this.reloadTap;
     this.reloadTap = false;
     it.gadget = this.gadgetCmd;

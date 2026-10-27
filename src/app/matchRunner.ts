@@ -55,6 +55,7 @@ export class MatchRunner implements Runner {
   private takeoverAuto = -1;
   private roundEndAt = -1;
   private camIdx = 0;
+  private hitstop = 0;
   private hints: Hint[] = [];
   private lastPick: RoundPick | null = null;
   private keyHandler = (e: KeyboardEvent) => this.onKey(e);
@@ -70,6 +71,8 @@ export class MatchRunner implements Runner {
     this.fb = new Feedback(ctx.sfx, this.hud, ctx.view, () => ctx.scene.cameras.main.zoom);
     this.fb.onHumanDeath = (k) => this.onHumanDeath(k);
     this.fb.onDroneLost = () => (this.camIdx = 0);
+    // hit-stop: the world freezes for a beat when you land a kill
+    this.fb.onHumanKill = () => (this.hitstop = 0.07);
     this.callouts = new Callouts(this.hud.root);
     this.callouts.enabledSoundCaptions = ctx.settings.captions;
     this.wireHud();
@@ -525,7 +528,8 @@ export class MatchRunner implements Runner {
     if (live) {
       const devSpeed = import.meta.env.DEV ? Number(this.ctx.debug.speed) || 1 : 1;
       const speed = (this.state === 'spectate' ? 2 : 1) * devSpeed;
-      this.stepper.advance(dt * speed, () => this.tick(), 6 * Math.ceil(speed));
+      if (this.hitstop > 0) this.hitstop -= dt;
+      else this.stepper.advance(dt * speed, () => this.tick(), 6 * Math.ceil(speed));
     }
     if (this.state === 'dead' && this.realTime - this.deadAt > 1.8) {
       if (w.alive(0).length > 0) this.openTakeover();
@@ -612,6 +616,12 @@ export class MatchRunner implements Runner {
     this.callouts.onTick(w, events, w.human()?.id ?? -1, this.statuses());
     if (ended) {
       const win = w.result!.winner === 0;
+      // last kill of the round gets the slow-motion close-up
+      const last = [...events].reverse().find((e) => e.type === 'death');
+      if (last && last.type === 'death') {
+        const v = w.actor(last.actorId);
+        if (v && (v.team === 0 || w.visible[0].has(v.id) || last.killerId === w.human()?.id)) this.ctx.view.finalKill(v.pos);
+      }
       this.hud.banner(win ? 'ROUND WON' : 'ROUND LOST', REASON_TEXT[w.result!.reason] ?? '', 2000, win ? 'win' : 'lose');
       this.ctx.sfx.play(win ? 'round_win' : 'round_lose');
       this.roundEndAt = this.realTime + 2.2;

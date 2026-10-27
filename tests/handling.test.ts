@@ -15,8 +15,8 @@ describe('operator ratings and weapon handling', () => {
       steps(w, 1, () => new Map([[ram.id, intent({ aim: 0, fire: true })]]));
       hits[name] = 100 - target.hp;
     }
-    expect(hits.DEX).toBe(25); // carbine, armour 1
-    expect(hits.HINGE).toBe(20); // armour 3: 20% less
+    expect(hits.DEX).toBe(30); // carbine, armour 1
+    expect(hits.HINGE).toBe(24); // armour 3: 20% less
   });
 
   it('a light operator outruns a heavy one', () => {
@@ -42,5 +42,22 @@ describe('operator ratings and weapon handling', () => {
     steps(w, 1, () => new Map([[tess.id, intent({ aim: 0, fire: true })]]));
     expect(tess.mag).toBe(0);
     expect(tess.reloadUntil).toBe(-1);
+  });
+
+  it('slide bursts you forward, then needs a cooldown', () => {
+    const w = makeWorld();
+    park(w);
+    const [ram, mo] = attackers(w);
+    place(ram, { x: 12.5, y: 13.5 });
+    place(mo, { x: 12.5, y: 16.5 });
+    const fwd = { x: 1, y: 0 };
+    steps(w, 1, () => new Map([[ram.id, intent({ move: fwd, slide: true })], [mo.id, intent({ move: fwd })]]));
+    steps(w, secs(0.3), () => new Map([[ram.id, intent({ move: fwd })], [mo.id, intent({ move: fwd })]]));
+    // Ram (medium) out-slides Mo (light) walking
+    expect(ram.pos.x - 12.5).toBeGreaterThan((mo.pos.x - 12.5) * 1.6);
+    const ready = ram.slideReadyTick;
+    steps(w, 1, () => new Map([[ram.id, intent({ move: fwd, slide: true })]]));
+    expect(ram.slide).toBeNull(); // still cooling down
+    expect(ram.slideReadyTick).toBe(ready);
   });
 });

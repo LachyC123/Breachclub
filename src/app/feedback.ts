@@ -31,6 +31,8 @@ export class Feedback {
   done = new Set<string>();
   onHumanDeath: (killerId: number) => void = () => {};
   onDroneLost: () => void = () => {};
+  /** the player's own kills (hit-stop) */
+  onHumanKill: () => void = () => {};
 
   constructor(
     private sfx: Sfx,
@@ -160,6 +162,7 @@ export class Feedback {
           if (k && k.id === human?.id && a && a.team !== 0) {
             this.stats.humanKills++;
             this.sfx.play('kill_confirm');
+            this.onHumanKill();
             this.hud.killPop(a.name, 100);
           }
           if (a && a.id === human?.id) this.onHumanDeath(e.killerId);
@@ -197,6 +200,11 @@ export class Feedback {
         case 'wallBreached': {
           const a = w.actor(e.by);
           if (a && a.id === human?.id && e.cause === 'sled') this.stats.sledBreach = roomAt(w.map, w.map.softGroups[e.group].center)?.name ?? 'a room';
+          break;
+        }
+        case 'slide': {
+          const sl = w.actor(e.actorId);
+          if (sl && (sl.team === 0 || w.visible[0].has(sl.id))) this.playAt(w, 'slide', sl.pos, 8, false, sl.id === human?.id ? 1 : 0.7);
           break;
         }
         case 'vault':
