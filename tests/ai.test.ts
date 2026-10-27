@@ -28,3 +28,35 @@ describe('attack squad AI', () => {
     expect(w.armedBy).not.toBe(human.id);
   });
 });
+
+import { World } from '../src/sim/world';
+import { dist } from '../src/sim/geometry';
+import { roomAt } from '../src/sim/mapdata';
+import { canSee } from '../src/sim/perception';
+
+describe('defence squad AI', () => {
+  it('defenders spend prep fortifying, not shooting at untouchable attackers or camping a spawn', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const w = new World({ seed, attackTeam: 1, squads: [['hinge', 'recruit_dex', 'recruit_june'], ['ram', 'recruit_mo', 'recruit_tess']], humanIndex: -1, attackEntry: 'window', difficulty: 'club' });
+      const ai = new AIDirector(w);
+      while (w.phase === 'prep') {
+        const drones = w.entities.filter((d) => d.kind === 'drone').map((d) => ({ ...(d as { pos: { x: number; y: number } }).pos }));
+        w.step(ai.think());
+        // nobody can be hurt in prep: every defender shot must be at a drone, never at people
+        for (const e of w.events) {
+          if (e.type !== 'shot' || w.actor(e.actorId)?.team !== w.defendTeam) continue;
+          const ang = Math.atan2(e.to.y - e.from.y, e.to.x - e.from.x);
+          const atDrone = drones.some((d) => Math.abs(Math.atan2(Math.sin(Math.atan2(d.y - e.from.y, d.x - e.from.x) - ang), Math.cos(Math.atan2(d.y - e.from.y, d.x - e.from.x) - ang))) < 0.3);
+          expect(atDrone, `seed ${seed}: defender ${e.actorId} shot at nothing during prep`).toBe(true);
+        }
+      }
+      const spawns = w.map.entries.flatMap((e) => e.spots.map(([x, y]) => ({ x, y })));
+      for (const d of w.actors.filter((a) => a.team === w.defendTeam)) {
+        const off = roomAt(w.map, d.pos)?.id !== w.map.objectiveRoom;
+        // standing where an attacker spawn can see you (the window lets sight through)
+        const camping = off && spawns.some((s) => dist(s, d.pos) < 8 && canSee(w, s, d.pos));
+        expect(camping, `seed ${seed}: ${d.name} at ${d.pos.x.toFixed(1)},${d.pos.y.toFixed(1)}`).toBe(false);
+      }
+    }
+  });
+});

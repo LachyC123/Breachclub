@@ -35,7 +35,9 @@ export function followPath(w: World, a: Actor, b: BotState, goal: Vec, intent: A
       // sealed in or out by a barricade: walk up to it and shoot it down (any team's)
       const r2 = findPath(w, a.side, a.pos, goal, { breachCost: 8, doorsOnly: true });
       const door = r2?.breaches.find((x) => x >= 100);
-      if (r2 && door !== undefined) {
+      // never tear down your own team's fortification during prep: pick another task instead
+      const ownPrep = door !== undefined && w.phase === 'prep' && w.barricades[door - 100]?.team === a.team;
+      if (r2 && door !== undefined && !ownPrep) {
         const g = navGrid(w, a.side);
         const cut = r2.cells.findIndex((c) => !g.walk[c]);
         b.path = smooth(w, a.pos, r2.points.slice(0, Math.max(1, cut)));

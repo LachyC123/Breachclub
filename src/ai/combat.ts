@@ -38,7 +38,9 @@ export interface EngageOpts {
   hold: boolean;
 }
 
-export function engage(w: World, a: Actor, b: BotState, p: Perception, diff: DiffParams, intent: ActorIntent, opts: EngageOpts): boolean {
+export function engage(w: World, a: Actor, b: BotState, p0: Perception, diff: DiffParams, intent: ActorIntent, opts: EngageOpts): boolean {
+  // nobody can be hurt during preparation: only drones are worth shooting
+  const p = w.phase === 'prep' ? { ...p0, visible: [] } : p0;
   if (p.visible.length === 0) {
     if (shootDrone(w, a, b, diff, intent)) return true;
     // finish a fallback even after losing sight: reload in cover before re-peeking
@@ -84,14 +86,17 @@ export function engage(w: World, a: Actor, b: BotState, p: Perception, diff: Dif
   const range = a.weapon.effective_range_tiles * (a.weapon.pellets > 1 ? 1.4 : 1.6);
   const tol = Math.max(0.05, Math.atan2(0.42, d)) + 0.03;
 
-  // fall back: losing the trade, or empty with a threat in front of us
-  const losing = a.hp < 45 && (target.hp > a.hp || p.visible.length > 1) && d < 9;
+  // fall back: losing the trade, or empty with a threat in front of us (point blank, turning away
+  // only gets you shot in the back: fight it out)
+  const losing = a.hp < 45 && (target.hp > a.hp || p.visible.length > 1) && d < 9 && d > 3.5;
+  // a defender facing two or more at once breaks line of sight and re-peeks one at a time
+  const outnumbered = a.side === 'defence' && p.visible.length >= 2 && d > 3.5 && w.phase !== 'armed';
   // at most two retreats per stretch of fighting: then commit (time and the objective matter)
   if (w.tick - b.fallbackWindow > secs(10)) {
     b.fallbackWindow = w.tick;
     b.fallbackCount = 0;
   }
-  if ((losing || (a.mag === 0 && a.reserve > 0)) && !b.fallback && !a.interaction && b.fallbackCount < 2 && w.secondsLeft() > 15) {
+  if ((losing || outnumbered || (a.mag === 0 && a.reserve > 0)) && !b.fallback && !a.interaction && b.fallbackCount < 2 && w.secondsLeft() > 15) {
     b.fallbackCount++;
     const cover = coverFrom(w, a, a.pos, target.pos);
     if (cover) b.fallback = { pos: cover, until: w.tick + secs(2.2), threat: { ...target.pos } };

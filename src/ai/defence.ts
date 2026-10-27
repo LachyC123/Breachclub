@@ -1,7 +1,7 @@
 // Defending squad strategy: fortify from the objective side in prep, then hold authored spots
 // that cover approaches from behind cover. Rotate toward the approach the team has evidence of,
 // keep an anchor on site, and send the safest defender to shut off an armed console.
-import { secs } from '../content/defs';
+import { RULES, secs } from '../content/defs';
 import { dist, hingeObb, rayObb } from '../sim/geometry';
 import { validateHingePlacement } from '../sim/gadgets';
 import type { Actor, HingeEntity, Vec } from '../sim/types';
@@ -78,19 +78,34 @@ export class DefenceBrain {
     const threatApproach = threats.length ? approachOf(w, threats[threats.length - 1]) : '';
     const current = b.task.kind === 'hold' ? spots.find((s) => dist(s.pos, (b.task as { pos: Vec }).pos) < 0.1) : undefined;
     const since = this.lastSpotChange.get(a.id) ?? -999;
-    // don't fidget: keep a spot for at least 4s unless the current one is now useless
-    if (current && w.tick - since < secs(4) && (!siteOnly || current.id.startsWith('office'))) return;
     const objRoom = w.map.objectiveRoom;
-    const linked = (s: HoldSpot) => !!findPath(w, 'defence', w.map.console.center, s.pos);
+    const onSite = (s: HoldSpot) => s.id.startsWith(objRoom === 'office' ? 'office' : objRoom);
+    const near = (s: HoldSpot, r: number) => threats.filter((t) => dist(t, s.pos) < r).length;
+    // don't fidget: keep a spot for at least 4s unless it is now useless or about to be overrun
+    const overrun = current && !onSite(current) && near(current, 9) >= 2 && w.tick - b.lastEngageTick > secs(2);
+    if (current && w.tick - since < secs(4) && (!siteOnly || onSite(current)) && !overrun) return;
+    // reachable from the site and from where this defender actually stands
+    const linked = (s: HoldSpot) => !!findPath(w, 'defence', w.map.console.center, s.pos) && !!findPath(w, 'defence', a.pos, s.pos);
+    // the first seconds of action: anyone who knows the map knows where attackers can spawn
+    const early = w.phase === 'prep' || w.phase === 'action' && w.tick - (w.phaseEndTick - secs(w.cfg.actionSeconds ?? RULES.action_seconds)) < secs(20);
+    const spawns = w.map.entries.flatMap((e) => e.spots.map(([x, y]) => ({ x, y })));
     let best: HoldSpot | null = null;
     let bestScore = -Infinity;
     for (const s of spots) {
       const claimer = this.claims.get(s.id);
       if (claimer !== undefined && claimer !== a.id && w.actor(claimer)?.alive) continue;
-      if (siteOnly && !s.id.startsWith(objRoom === 'office' ? 'office' : objRoom)) continue;
+      if (siteOnly && !onSite(s)) continue;
       let score = 0;
       if (s.roles.includes(b.role === 'anchor' || b.role === 'support' || b.role === 'roamer' ? b.role : 'support')) score += 6;
-      if (threatApproach && s.covers.includes(threatApproach)) score += b.role === 'anchor' ? 4 : 7;
+      const nearest = threats.reduce((m, t) => Math.min(m, dist(t, s.pos)), Infinity);
+      // cover the approach they're using, but from a distance: never walk onto their position
+      if (threatApproach && s.covers.includes(threatApproach) && nearest >= 6) score += b.role === 'anchor' ? 4 : 7;
+      if (nearest < 6) score -= 14;
+      // a lone roamer doesn't take on a whole squad: fall back to site when several are close
+      if (!onSite(s) && near(s, 10) >= 2) score -= 9;
+      // and doesn't cross their sightlines to get there
+      if (s !== current && threats.some((t) => segDist(t, a.pos, s.pos) < 4)) score -= 8;
+      if (early && !onSite(s) && spawns.some((sp) => dist(sp, s.pos) < 8)) score -= 10;
       // gentle variety between rounds, stable within one
       score += ((s.id.length * 7 + b.slot * 13 + w.cfg.seed) % 10) / 10;
       score -= dist(a.pos, s.pos) * 0.08;
@@ -215,4 +230,13 @@ export class DefenceBrain {
     const other = h.orient === 0 ? h.angle + Math.PI / 2 : h.angle - Math.PI / 2;
     if (threats.filter((t) => blocks(other, t)).length > threats.filter((t) => blocks(h.angle, t)).length) b.wantRotate = true;
   }
+}
+
+/** Distance from point p to the segment a-b. */
+function segDist(p: Vec, a: Vec, b: Vec): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+  return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
 }
